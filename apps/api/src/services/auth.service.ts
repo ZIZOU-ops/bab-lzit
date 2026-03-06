@@ -37,10 +37,11 @@ export async function signup(input: {
   password?: string;
   fullName: string;
 }): Promise<TokenPair> {
+  const normalizedEmail = input.email ? input.email.toLowerCase().trim() : undefined;
   const phone = input.phone ? normalizePhone(input.phone) : undefined;
 
-  if (input.email) {
-    const existing = await prisma.user.findUnique({ where: { email: input.email } });
+  if (normalizedEmail) {
+    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing) throw new AppError(409, 'DUPLICATE', AUTH.DUPLICATE_EMAIL);
   }
   if (phone) {
@@ -54,7 +55,7 @@ export async function signup(input: {
 
   const user = await prisma.user.create({
     data: {
-      email: input.email ?? null,
+      email: normalizedEmail ?? null,
       phone: phone ?? null,
       passwordHash,
       fullName: input.fullName,
@@ -68,7 +69,8 @@ export async function signup(input: {
 }
 
 export async function login(email: string, password: string): Promise<TokenPair> {
-  const user = await prisma.user.findUnique({ where: { email } });
+  const normalizedEmail = email.toLowerCase().trim();
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (!user || !user.passwordHash || !user.isActive) {
     throw new AppError(401, 'INVALID_CREDENTIALS', AUTH.INVALID_CREDENTIALS);
   }
