@@ -1,6 +1,45 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
-  }
+    "strict": true,
+    "types": [
+      "expo-router/types"
+    ]
+  },
+  "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "src/components/chat/**/*.ts",
+    "src/components/chat/**/*.tsx",
+    "src/components/order/**/*.ts",
+    "src/components/order/**/*.tsx",
+    "src/components/ui/**/*.ts",
+    "src/components/ui/**/*.tsx",
+    "src/constants/**/*.ts",
+    "src/constants/**/*.tsx",
+    "src/hooks/usePushNotifications.ts",
+    "src/hooks/negotiation/**/*.ts",
+    "src/hooks/negotiation/**/*.tsx",
+    "src/hooks/orders/**/*.ts",
+    "src/hooks/orders/**/*.tsx",
+    "src/hooks/pro/**/*.ts",
+    "src/hooks/pro/**/*.tsx",
+    "src/lib/**/*.ts",
+    "src/lib/**/*.tsx",
+    "src/providers/**/*.ts",
+    "src/providers/**/*.tsx",
+    "src/state/**/*.ts",
+    "src/state/**/*.tsx"
+  ],
+  "exclude": [
+    "src/navigation/**",
+    "src/screens/**",
+    "src/contexts/**",
+    "src/services/**",
+    "src/components/BottomTabBar.tsx",
+    "src/components/icons.tsx",
+    "src/components/NegotiationBar.tsx",
+    "src/i18n/**",
+    "src/theme/**"
+  ]
 }

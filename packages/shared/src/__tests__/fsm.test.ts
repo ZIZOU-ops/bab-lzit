@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidTransition, getValidNextStatuses } from '../fsm';
-import { OrderStatus } from '../types/enums';
+import { isValidTransition, getValidNextStatuses } from '../fsm/order-status';
 
 describe('Order FSM', () => {
   it('draft → submitted is valid', () => {

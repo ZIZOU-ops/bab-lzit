@@ -1,214 +1,287 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { prisma } from '../db';
-import { config } from '../config';
-import { signAccessToken, generateRefreshToken, hashToken } from '../utils/jwt';
-import { AppError } from '../middleware/error.handler';
 import { normalizePhone } from '@babloo/shared';
-import { AUTH } from '../constants/errors';
+import { ERROR_CODES } from '@babloo/shared/errors';
+import type { PrismaClient } from '@prisma/client';
+import type Redis from 'ioredis';
+import type { Logger } from 'pino';
+import { env } from '../config/env';
+import { generateRefreshToken, hashToken, issueAccessToken } from '../lib/jwt';
+import {
+  AuthError,
+  ConflictError,
+  RateLimitError,
+  ValidationError,
+} from '../lib/errors';
 
-interface TokenPair {
-  accessToken: string;
-  refreshToken: string;
-}
+type Deps = {
+  db: PrismaClient;
+  redis: Redis;
+  logger: Logger;
+};
 
-function issueAccessToken(user: { id: string; role: string; locale: string }): string {
-  return signAccessToken({ userId: user.id, role: user.role, locale: user.locale });
-}
-
-async function createRefreshToken(userId: string, family: string): Promise<string> {
-  const raw = generateRefreshToken();
-  const hash = hashToken(raw);
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 30);
-  await prisma.refreshToken.create({
-    data: { userId, tokenHash: hash, family, expiresAt },
-  });
-  return raw;
-}
-
-function generateFamily(): string {
-  return crypto.randomUUID();
-}
-
-export async function signup(input: {
+type SignupInput = {
   email?: string;
   phone?: string;
   password?: string;
   fullName: string;
-}): Promise<TokenPair> {
-  const normalizedEmail = input.email ? input.email.toLowerCase().trim() : undefined;
+};
+
+type LoginInput = {
+  email: string;
+  password: string;
+};
+
+type OtpRequestInput = {
+  phone: string;
+  purpose: 'login' | 'signup' | 'reset';
+};
+
+type OtpVerifyInput = {
+  challengeId: string;
+  code: string;
+  fullName?: string;
+};
+
+type TokenPair = {
+  accessToken: string;
+  refreshToken: string;
+};
+
+function generateFamily() {
+  return crypto.randomUUID();
+}
+
+function buildTokenPair(
+  user: { id: string; role: string; locale: string; fullName: string },
+  refreshToken: string,
+) {
+  return {
+    accessToken: issueAccessToken({
+      userId: user.id,
+      role: user.role,
+      locale: user.locale,
+      fullName: user.fullName,
+    }),
+    refreshToken,
+  };
+}
+
+async function createRefreshToken(deps: Deps, userId: string, family: string): Promise<string> {
+  const raw = generateRefreshToken();
+  const tokenHash = hashToken(raw);
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  await deps.db.refreshToken.create({
+    data: {
+      userId,
+      tokenHash,
+      family,
+      expiresAt,
+    },
+  });
+
+  return raw;
+}
+
+export async function signup(deps: Deps, input: SignupInput): Promise<TokenPair> {
+  const normalizedEmail = input.email?.toLowerCase().trim();
   const phone = input.phone ? normalizePhone(input.phone) : undefined;
 
-  if (normalizedEmail) {
-    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (existing) throw new AppError(409, 'DUPLICATE', AUTH.DUPLICATE_EMAIL);
+  if (!normalizedEmail && !phone) {
+    throw new ValidationError(
+      ERROR_CODES.AUTH_MISSING_IDENTIFIER,
+      'Email or phone is required',
+    );
   }
+
+  if (normalizedEmail) {
+    const existingByEmail = await deps.db.user.findUnique({ where: { email: normalizedEmail } });
+    if (existingByEmail) {
+      throw new ConflictError(ERROR_CODES.AUTH_EMAIL_EXISTS, 'Email already exists');
+    }
+  }
+
   if (phone) {
-    const existing = await prisma.user.findUnique({ where: { phone } });
-    if (existing) throw new AppError(409, 'DUPLICATE', AUTH.DUPLICATE_PHONE);
+    const existingByPhone = await deps.db.user.findUnique({ where: { phone } });
+    if (existingByPhone) {
+      throw new ConflictError(ERROR_CODES.AUTH_PHONE_EXISTS, 'Phone already exists');
+    }
   }
 
   const passwordHash = input.password
-    ? await bcrypt.hash(input.password, config.bcrypt.rounds)
+    ? await bcrypt.hash(input.password, env.BCRYPT_ROUNDS)
     : null;
 
-  const user = await prisma.user.create({
+  const user = await deps.db.user.create({
     data: {
       email: normalizedEmail ?? null,
       phone: phone ?? null,
       passwordHash,
       fullName: input.fullName,
+      role: 'client',
     },
   });
 
   const family = generateFamily();
-  const accessToken = issueAccessToken(user);
-  const refreshToken = await createRefreshToken(user.id, family);
-  return { accessToken, refreshToken };
+  const refreshToken = await createRefreshToken(deps, user.id, family);
+  return buildTokenPair(user, refreshToken);
 }
 
-export async function login(email: string, password: string): Promise<TokenPair> {
-  const normalizedEmail = email.toLowerCase().trim();
-  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+export async function login(deps: Deps, input: LoginInput): Promise<TokenPair> {
+  const normalizedEmail = input.email.toLowerCase().trim();
+  const user = await deps.db.user.findUnique({ where: { email: normalizedEmail } });
+
   if (!user || !user.passwordHash || !user.isActive) {
-    throw new AppError(401, 'INVALID_CREDENTIALS', AUTH.INVALID_CREDENTIALS);
+    throw new AuthError(ERROR_CODES.AUTH_INVALID_CREDENTIALS, 'Invalid credentials');
   }
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
-    throw new AppError(401, 'INVALID_CREDENTIALS', AUTH.INVALID_CREDENTIALS);
+
+  const isValidPassword = await bcrypt.compare(input.password, user.passwordHash);
+  if (!isValidPassword) {
+    throw new AuthError(ERROR_CODES.AUTH_INVALID_CREDENTIALS, 'Invalid credentials');
   }
+
   const family = generateFamily();
-  const accessToken = issueAccessToken(user);
-  const refreshToken = await createRefreshToken(user.id, family);
-  return { accessToken, refreshToken };
+  const refreshToken = await createRefreshToken(deps, user.id, family);
+  return buildTokenPair(user, refreshToken);
 }
 
-export async function otpRequest(phone: string, purpose: string): Promise<{ challengeId: string }> {
-  const normalized = normalizePhone(phone);
+export async function otpRequest(deps: Deps, input: OtpRequestInput): Promise<{ challengeId: string }> {
+  const normalizedPhone = normalizePhone(input.phone);
 
-  // DB-backed throttle: authoritative gate
   const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
-  const recentCount = await prisma.otpChallenge.count({
-    where: { phone: normalized, createdAt: { gte: fifteenMinAgo } },
+  const recentCount = await deps.db.otpChallenge.count({
+    where: {
+      phone: normalizedPhone,
+      createdAt: { gte: fifteenMinAgo },
+    },
   });
-  if (recentCount >= config.otp.rateLimitPer15Min) {
-    throw new AppError(429, 'OTP_RATE_LIMIT', AUTH.OTP_RATE_LIMIT);
+
+  if (recentCount >= env.OTP_RATE_LIMIT_PER_15MIN) {
+    throw new RateLimitError(
+      ERROR_CODES.AUTH_OTP_RATE_LIMITED,
+      'Too many OTP requests. Try again later.',
+    );
   }
 
-  const code = config.isDev
-    ? config.otp.devBypassCode
-    : String(Math.floor(100000 + Math.random() * 900000));
+  const code =
+    env.NODE_ENV === 'production'
+      ? String(Math.floor(100000 + Math.random() * 900000))
+      : '123456';
 
-  const codeHash = await bcrypt.hash(code, config.bcrypt.rounds);
-  const expiresAt = new Date(Date.now() + config.otp.ttlMinutes * 60 * 1000);
+  const codeHash = await bcrypt.hash(code, env.BCRYPT_ROUNDS);
+  const expiresAt = new Date(Date.now() + env.OTP_TTL_MINUTES * 60 * 1000);
 
-  const challenge = await prisma.otpChallenge.create({
-    data: { phone: normalized, purpose: purpose as any, codeHash, expiresAt },
+  const challenge = await deps.db.otpChallenge.create({
+    data: {
+      phone: normalizedPhone,
+      purpose: input.purpose,
+      codeHash,
+      expiresAt,
+    },
   });
 
-  if (config.isDev) {
-    console.log(`[dev-otp] phone=${normalized} code=${code}`);
+  deps.logger.info({ phone: normalizedPhone }, 'OTP challenge created');
+  if (env.NODE_ENV !== 'production') {
+    deps.logger.info({ phone: normalizedPhone, code }, 'OTP dev code');
   }
 
   return { challengeId: challenge.id };
 }
 
-export async function otpVerify(
-  challengeId: string,
-  code: string,
-  fullName?: string,
-): Promise<TokenPair> {
-  // Atomic attempt increment — prevents TOCTOU race on attempt limit.
-  // If 0 rows updated the challenge is invalid, expired, consumed, or exhausted.
-  const { count } = await prisma.otpChallenge.updateMany({
+export async function otpVerify(deps: Deps, input: OtpVerifyInput): Promise<TokenPair> {
+  const now = new Date();
+
+  const incrementResult = await deps.db.otpChallenge.updateMany({
     where: {
-      id: challengeId,
+      id: input.challengeId,
       consumedAt: null,
-      attempts: { lt: config.otp.maxAttempts },
-      expiresAt: { gt: new Date() },
+      attempts: { lt: env.OTP_MAX_ATTEMPTS },
+      expiresAt: { gt: now },
     },
-    data: { attempts: { increment: 1 } },
+    data: {
+      attempts: { increment: 1 },
+    },
   });
 
-  if (count === 0) {
-    throw new AppError(401, 'INVALID_CREDENTIALS', AUTH.INVALID_CREDENTIALS);
+  if (incrementResult.count === 0) {
+    throw new AuthError(ERROR_CODES.AUTH_OTP_INVALID, 'Invalid OTP challenge');
   }
 
-  // Re-fetch to get codeHash and phone (updateMany doesn't return the row)
-  const challenge = await prisma.otpChallenge.findUnique({
-    where: { id: challengeId },
+  const challenge = await deps.db.otpChallenge.findUnique({
+    where: { id: input.challengeId },
   });
 
   if (!challenge) {
-    throw new AppError(401, 'INVALID_CREDENTIALS', AUTH.INVALID_CREDENTIALS);
+    throw new AuthError(ERROR_CODES.AUTH_OTP_INVALID, 'Invalid OTP challenge');
   }
 
-  const valid = await bcrypt.compare(code, challenge.codeHash);
+  const valid = await bcrypt.compare(input.code, challenge.codeHash);
   if (!valid) {
-    throw new AppError(401, 'INVALID_CREDENTIALS', AUTH.INVALID_CREDENTIALS);
+    throw new AuthError(ERROR_CODES.AUTH_OTP_INVALID, 'Invalid OTP code');
   }
 
-  await prisma.otpChallenge.update({
+  await deps.db.otpChallenge.update({
     where: { id: challenge.id },
     data: { consumedAt: new Date() },
   });
 
-  let user = await prisma.user.findUnique({ where: { phone: challenge.phone } });
+  let user = await deps.db.user.findUnique({ where: { phone: challenge.phone } });
   if (!user) {
-    user = await prisma.user.create({
+    user = await deps.db.user.create({
       data: {
         phone: challenge.phone,
-        fullName: fullName?.trim() || challenge.phone,
+        fullName: input.fullName?.trim() || challenge.phone,
       },
     });
   }
 
   if (!user.isActive) {
-    throw new AppError(401, 'INVALID_CREDENTIALS', AUTH.INVALID_CREDENTIALS);
+    throw new AuthError(ERROR_CODES.AUTH_FORBIDDEN, 'User is inactive');
   }
 
   const family = generateFamily();
-  const accessToken = issueAccessToken(user);
-  const refreshToken = await createRefreshToken(user.id, family);
-  return { accessToken, refreshToken };
+  const refreshToken = await createRefreshToken(deps, user.id, family);
+  return buildTokenPair(user, refreshToken);
 }
 
-export async function refresh(rawRefreshToken: string): Promise<TokenPair> {
-  const hash = hashToken(rawRefreshToken);
-  const token = await prisma.refreshToken.findUnique({
-    where: { tokenHash: hash },
+export async function refresh(
+  deps: Deps,
+  input: { refreshToken: string },
+): Promise<TokenPair> {
+  const tokenHash = hashToken(input.refreshToken);
+
+  const token = await deps.db.refreshToken.findUnique({
+    where: { tokenHash },
     include: { user: true },
   });
 
   if (!token) {
-    throw new AppError(401, 'INVALID_CREDENTIALS', AUTH.INVALID_CREDENTIALS);
+    throw new AuthError(ERROR_CODES.AUTH_TOKEN_INVALID, 'Invalid refresh token');
   }
 
   if (token.isRevoked) {
-    await prisma.refreshToken.updateMany({
+    await deps.db.refreshToken.updateMany({
       where: { family: token.family },
       data: { isRevoked: true },
     });
-    throw new AppError(401, 'TOKEN_REUSE', AUTH.INVALID_CREDENTIALS);
+    throw new AuthError(ERROR_CODES.AUTH_TOKEN_REVOKED, 'Refresh token revoked');
   }
 
   if (token.expiresAt < new Date()) {
-    throw new AppError(401, 'INVALID_CREDENTIALS', AUTH.INVALID_CREDENTIALS);
+    throw new AuthError(ERROR_CODES.AUTH_TOKEN_EXPIRED, 'Refresh token expired');
   }
 
   if (!token.user.isActive) {
-    throw new AppError(401, 'INVALID_CREDENTIALS', AUTH.INVALID_CREDENTIALS);
+    throw new AuthError(ERROR_CODES.AUTH_FORBIDDEN, 'User is inactive');
   }
 
   const newRaw = generateRefreshToken();
   const newHash = hashToken(newRaw);
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 30);
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-  // Interactive transaction: create new token first to get its ID for replacedBy
-  await prisma.$transaction(async (tx) => {
-    const newToken = await tx.refreshToken.create({
+  await deps.db.$transaction(async (tx) => {
+    const replacement = await tx.refreshToken.create({
       data: {
         userId: token.userId,
         tokenHash: newHash,
@@ -216,31 +289,39 @@ export async function refresh(rawRefreshToken: string): Promise<TokenPair> {
         expiresAt,
       },
     });
+
     await tx.refreshToken.update({
       where: { id: token.id },
-      data: { isRevoked: true, replacedBy: newToken.id },
+      data: {
+        isRevoked: true,
+        replacedBy: replacement.id,
+      },
     });
   });
 
-  const accessToken = issueAccessToken(token.user);
-  return { accessToken, refreshToken: newRaw };
+  return buildTokenPair(token.user, newRaw);
 }
 
-export async function logout(userId: string, rawRefreshToken?: string): Promise<void> {
-  if (rawRefreshToken) {
-    const hash = hashToken(rawRefreshToken);
-    const token = await prisma.refreshToken.findUnique({ where: { tokenHash: hash } });
-    if (token && token.userId === userId) {
-      await prisma.refreshToken.updateMany({
-        where: { family: token.family },
-        data: { isRevoked: true },
-      });
-    }
+export async function logout(
+  deps: Deps,
+  userId: string,
+  refreshToken: string,
+): Promise<void> {
+  const tokenHash = hashToken(refreshToken);
+  const token = await deps.db.refreshToken.findUnique({ where: { tokenHash } });
+
+  if (!token || token.userId !== userId) {
+    return;
   }
+
+  await deps.db.refreshToken.updateMany({
+    where: { family: token.family },
+    data: { isRevoked: true },
+  });
 }
 
-export async function logoutAll(userId: string): Promise<void> {
-  await prisma.refreshToken.updateMany({
+export async function logoutAll(deps: Deps, userId: string): Promise<void> {
+  await deps.db.refreshToken.updateMany({
     where: { userId },
     data: { isRevoked: true },
   });

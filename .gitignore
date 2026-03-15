@@ -1,12 +1,9 @@
 node_modules/
 dist/
 .env
-.env.local
-.expo/
-*.tsbuildinfo
-.turbo/
-coverage/
 *.log
+.turbo/
+.expo/
 .DS_Store
-.worktrees/
-.DS_Store
+ios/
+android/

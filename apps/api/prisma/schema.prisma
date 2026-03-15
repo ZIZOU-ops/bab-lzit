@@ -141,6 +141,7 @@ model Order {
   offers       NegotiationOffer[]
   rating       Rating?
 
+  @@index([createdAt, id])
   @@map("orders")
 }
 
@@ -292,6 +293,7 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([actorUserId])
+  @@index([createdAt, id])
   @@map("audit_logs")
 }
 

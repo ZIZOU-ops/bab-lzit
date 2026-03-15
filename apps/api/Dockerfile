@@ -5,7 +5,8 @@ RUN npm install -g pnpm@10
 WORKDIR /app
 
 # Copy workspace config
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/config/ packages/config/
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
 
@@ -26,4 +27,4 @@ RUN node -e "const fs=require('fs'),p='packages/shared/package.json',j=JSON.pars
 RUN pnpm --filter @babloo/api build
 
 EXPOSE 3000
-CMD ["sh", "-c", "pnpm --filter @babloo/api db:migrate:deploy && node apps/api/dist/index.js"]
+CMD ["sh", "-c", "pnpm --filter @babloo/api db:migrate:deploy && node apps/api/dist/server.js"]

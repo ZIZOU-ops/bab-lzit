@@ -57,7 +57,8 @@ export function computeMenagePrice(params: MenageParams): PriceResult {
     }
   } else {
     // Over 300m²: use 300m² base + surcharge per extra 50m² block
-    const base300 = BRACKETS[BRACKETS.length - 1][teamType];
+    const lastBracket = BRACKETS[BRACKETS.length - 1]!;
+    const base300 = lastBracket[teamType];
     let baseForTeam: number;
     if (base300 === null) {
       const fallbackBracket = BRACKETS.find((b) => b[teamType] !== null);
@@ -86,7 +87,7 @@ export function computeMenagePrice(params: MenageParams): PriceResult {
   // Duration estimate
   const durRange =
     DURATION_RANGES.find((d) => surface <= d.maxSurface) ??
-    DURATION_RANGES[DURATION_RANGES.length - 1];
+    DURATION_RANGES[DURATION_RANGES.length - 1]!;
   const multiplier = TEAM_DURATION_MULTIPLIER[teamType];
 
   return {

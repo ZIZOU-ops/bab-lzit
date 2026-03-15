@@ -1,247 +1,374 @@
-import { prisma } from '../db';
-import { isValidTransition } from '@babloo/shared';
-import { AppError } from '../middleware/error.handler';
-import { NEGOTIATION } from '../constants/errors';
+import { randomUUID } from 'node:crypto';
+import { ERROR_CODES } from '@babloo/shared/errors';
+import type { PrismaClient } from '@prisma/client';
+import type { Logger } from 'pino';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../lib/errors';
+import type { DbClient } from '../lib/prisma';
+import * as notificationService from './notification.service';
 
-// ── Constants ──────────────────────────────────────────────
+type Deps = {
+  db: PrismaClient;
+  logger: Logger;
+};
+
 const CEILING_MULTIPLIER = 2.5;
 const OFFER_STEP = 5;
 
-// ── Helpers ────────────────────────────────────────────────
+async function nextSeq(db: DbClient, orderId: string): Promise<number> {
+  const latestMessage = await db.message.findFirst({
+    where: { orderId },
+    orderBy: { seq: 'desc' },
+    select: { seq: true },
+  });
 
-/**
- * Verify that `userId` is a participant in the order (client or assigned pro).
- * Returns { order, role } where role is 'client' | 'pro'.
- */
-export async function checkParticipant(userId: string, orderId: string) {
-  const order = await prisma.order.findUnique({
+  const latestOffer = await db.negotiationOffer.findFirst({
+    where: { orderId },
+    orderBy: { seq: 'desc' },
+    select: { seq: true },
+  });
+
+  const latestStatus = await db.statusEvent.findFirst({
+    where: { orderId },
+    orderBy: { seq: 'desc' },
+    select: { seq: true },
+  });
+
+  return Math.max(latestMessage?.seq ?? 0, latestOffer?.seq ?? 0, latestStatus?.seq ?? 0) + 1;
+}
+
+export async function checkParticipant(deps: Deps, userId: string, orderId: string) {
+  const order = await deps.db.order.findUnique({
     where: { id: orderId },
-    include: { assignments: { include: { professional: true } } },
+    include: {
+      assignments: {
+        include: {
+          professional: true,
+        },
+      },
+    },
   });
 
   if (!order) {
-    throw new AppError(404, 'NOT_FOUND', NEGOTIATION.NOT_FOUND);
+    throw new NotFoundError(ERROR_CODES.ORDER_NOT_FOUND, 'Order not found');
   }
 
-  // Check if user is the client
   if (order.clientId === userId) {
     return { order, participantRole: 'client' as const };
   }
 
-  // Check if user is an assigned professional
-  const assignment = order.assignments.find(
-    (a) => a.professional.userId === userId,
-  );
+  const assignment = order.assignments.find((a) => a.professional.userId === userId);
   if (assignment) {
     return { order, participantRole: 'pro' as const };
   }
 
-  throw new AppError(403, 'FORBIDDEN', NEGOTIATION.FORBIDDEN);
-}
-
-// ── Messages ───────────────────────────────────────────────
-
-export async function listMessages(
-  orderId: string,
-  sinceSeq: number,
-  limit: number,
-) {
-  const messages = await prisma.message.findMany({
-    where: { orderId, seq: { gt: sinceSeq } },
-    orderBy: { seq: 'asc' },
-    take: limit,
-  });
-
-  return messages;
+  throw new ForbiddenError(ERROR_CODES.ORDER_NOT_OWNED, 'Not a participant');
 }
 
 export async function sendMessage(
-  userId: string,
-  orderId: string,
-  content: string,
-  senderRole: 'client' | 'pro',
-  clientMessageId?: string,
+  deps: Deps,
+  input: {
+    orderId: string;
+    userId: string;
+    content: string;
+    clientMessageId?: string;
+  },
 ) {
-  // Idempotency: if clientMessageId already exists, return existing
-  if (clientMessageId) {
-    const existing = await prisma.message.findUnique({
-      where: { clientMessageId },
+  const { order, participantRole } = await checkParticipant(deps, input.userId, input.orderId);
+
+  if (order.status !== 'negotiating') {
+    throw new ConflictError(
+      ERROR_CODES.NEG_ORDER_NOT_NEGOTIATING,
+      'Order is not in negotiating state',
+    );
+  }
+
+  if (input.content.trim().length > 2000) {
+    throw new ValidationError(ERROR_CODES.NEG_MESSAGE_TOO_LONG, 'Message too long');
+  }
+
+  if (input.clientMessageId) {
+    const existing = await deps.db.message.findUnique({
+      where: { clientMessageId: input.clientMessageId },
     });
     if (existing) {
       return existing;
     }
   }
 
-  const message = await prisma.message.create({
-    data: {
-      orderId,
-      senderId: userId,
-      senderRole,
-      content,
-      clientMessageId: clientMessageId ?? null,
-    },
+  const message = await deps.db.$transaction(async (tx) => {
+    const seq = await nextSeq(tx, input.orderId);
+
+    return tx.message.create({
+      data: {
+        orderId: input.orderId,
+        senderId: input.userId,
+        senderRole: participantRole,
+        content: input.content.trim(),
+        clientMessageId: input.clientMessageId ?? null,
+        seq,
+      },
+    });
   });
+
+  await notificationService.notifyNewMessage(
+    { db: deps.db, logger: deps.logger },
+    {
+      orderId: input.orderId,
+      senderId: input.userId,
+      content: message.content,
+      correlationId: randomUUID(),
+    },
+  );
 
   return message;
 }
 
-// ── Offers ─────────────────────────────────────────────────
-
-export async function listOffers(orderId: string) {
-  const offers = await prisma.negotiationOffer.findMany({
-    where: { orderId },
-    orderBy: { seq: 'asc' },
-  });
-
-  return offers;
-}
-
 export async function createOffer(
-  userId: string,
-  orderId: string,
-  amount: number,
-  order: { floorPrice: number; status: string },
+  deps: Deps,
+  input: {
+    orderId: string;
+    userId: string;
+    amount: number;
+  },
 ) {
-  // Validate order is in negotiating state
+  const { order } = await checkParticipant(deps, input.userId, input.orderId);
+
   if (order.status !== 'negotiating') {
-    throw new AppError(409, 'INVALID_STATE', NEGOTIATION.NOT_NEGOTIATING);
+    throw new ConflictError(
+      ERROR_CODES.NEG_ORDER_NOT_NEGOTIATING,
+      'Order is not in negotiating state',
+    );
   }
 
-  const floor = order.floorPrice;
-  const ceiling = Math.round(floor * CEILING_MULTIPLIER);
-
-  // Validate amount bounds
-  if (amount < floor || amount > ceiling) {
-    throw new AppError(400, 'VALIDATION_ERROR', NEGOTIATION.AMOUNT_OUT_OF_RANGE(floor, ceiling));
+  const ceiling = Math.round(order.floorPrice * CEILING_MULTIPLIER);
+  if (input.amount < order.floorPrice || input.amount > ceiling) {
+    throw new ValidationError(
+      ERROR_CODES.NEG_AMOUNT_OUT_OF_BOUNDS,
+      `Offer amount must be between ${order.floorPrice} and ${ceiling}`,
+    );
   }
 
-  // Validate step
-  if (amount % OFFER_STEP !== 0) {
-    throw new AppError(400, 'VALIDATION_ERROR', NEGOTIATION.AMOUNT_NOT_MULTIPLE);
+  if (input.amount % OFFER_STEP !== 0) {
+    throw new ValidationError(
+      ERROR_CODES.NEG_AMOUNT_BAD_INCREMENT,
+      `Offer amount must be a multiple of ${OFFER_STEP}`,
+    );
   }
 
-  // Auto-reject previous pending offers by this user
-  await prisma.negotiationOffer.updateMany({
-    where: { orderId, offeredBy: userId, status: 'pending' },
-    data: { status: 'rejected' },
-  });
-
-  // Create new offer
-  const offer = await prisma.negotiationOffer.create({
-    data: {
-      orderId,
-      offeredBy: userId,
-      amount,
-      status: 'pending',
-    },
-  });
-
-  return offer;
-}
-
-export async function acceptOffer(
-  userId: string,
-  orderId: string,
-  offerId: string,
-  order: { floorPrice: number; status: string },
-  participantRole: 'client' | 'pro',
-) {
-  // Validate order is in negotiating state
-  if (order.status !== 'negotiating') {
-    throw new AppError(409, 'INVALID_STATE', NEGOTIATION.NOT_NEGOTIATING);
-  }
-
-  // Pre-flight check (non-atomic, for fast-fail with clear errors)
-  const offer = await prisma.negotiationOffer.findUnique({
-    where: { id: offerId },
-  });
-
-  if (!offer || offer.orderId !== orderId) {
-    throw new AppError(404, 'NOT_FOUND', NEGOTIATION.OFFER_NOT_FOUND);
-  }
-
-  if (offer.status !== 'pending') {
-    throw new AppError(409, 'INVALID_STATE', NEGOTIATION.OFFER_NOT_PENDING);
-  }
-
-  // Can't accept own offer
-  if (offer.offeredBy === userId) {
-    throw new AppError(403, 'FORBIDDEN', NEGOTIATION.CANNOT_ACCEPT_OWN);
-  }
-
-  // Atomic price lock transaction with guarded update
-  const result = await prisma.$transaction(async (tx) => {
-    // 1. Guarded accept: only succeeds if offer is still pending for this order
-    const { count } = await tx.negotiationOffer.updateMany({
-      where: { id: offerId, orderId, status: 'pending' },
-      data: { status: 'accepted', acceptedAt: new Date() },
-    });
-
-    if (count === 0) {
-      throw new AppError(409, 'INVALID_STATE', NEGOTIATION.OFFER_NOT_PENDING);
-    }
-
-    // Re-fetch the accepted offer for return value
-    const accepted = await tx.negotiationOffer.findUniqueOrThrow({
-      where: { id: offerId },
-    });
-
-    // 2. Reject all other pending offers for this order
+  return deps.db.$transaction(async (tx) => {
     await tx.negotiationOffer.updateMany({
-      where: { orderId, id: { not: offerId }, status: 'pending' },
+      where: {
+        orderId: input.orderId,
+        offeredBy: input.userId,
+        status: 'pending',
+      },
       data: { status: 'rejected' },
     });
 
-    // 3. Set final price on order and transition to accepted
-    const updatedOrder = await tx.order.update({
-      where: { id: orderId },
-      data: {
-        finalPrice: accepted.amount,
-        status: 'accepted',
-      },
-      include: { detail: true },
-    });
+    const seq = await nextSeq(tx, input.orderId);
 
-    // 4. Create status event: negotiating → accepted
-    await tx.statusEvent.create({
+    return tx.negotiationOffer.create({
       data: {
-        orderId,
-        fromStatus: 'negotiating',
-        toStatus: 'accepted',
-        actorUserId: userId,
-        actorRole: participantRole,
+        orderId: input.orderId,
+        offeredBy: input.userId,
+        amount: input.amount,
+        status: 'pending',
+        seq,
       },
     });
-
-    return { offer: accepted, order: updatedOrder };
   });
-
-  return result;
 }
 
-// ── Poll ───────────────────────────────────────────────────
+export async function acceptOffer(
+  deps: Deps,
+  input: {
+    orderId: string;
+    offerId: string;
+    userId: string;
+  },
+) {
+  const { order, participantRole } = await checkParticipant(deps, input.userId, input.orderId);
 
-export async function poll(orderId: string, sinceSeq: number) {
+  if (order.status !== 'negotiating') {
+    throw new ConflictError(
+      ERROR_CODES.NEG_ORDER_NOT_NEGOTIATING,
+      'Order is not in negotiating state',
+    );
+  }
+
+  const offer = await deps.db.negotiationOffer.findUnique({
+    where: { id: input.offerId },
+  });
+
+  if (!offer || offer.orderId !== input.orderId) {
+    throw new NotFoundError(ERROR_CODES.NEG_OFFER_NOT_FOUND, 'Offer not found');
+  }
+
+  if (offer.status !== 'pending') {
+    throw new ConflictError(
+      ERROR_CODES.NEG_OFFER_ALREADY_ACCEPTED,
+      'Offer is not pending',
+    );
+  }
+
+  if (offer.offeredBy === input.userId) {
+    throw new ForbiddenError(ERROR_CODES.AUTH_FORBIDDEN, 'Cannot accept own offer');
+  }
+
+  const acceptedResult = await deps.db.$transaction(async (tx) => {
+    const accepted = await tx.negotiationOffer.updateMany({
+      where: {
+        id: input.offerId,
+        orderId: input.orderId,
+        status: 'pending',
+      },
+      data: {
+        status: 'accepted',
+        acceptedAt: new Date(),
+      },
+    });
+
+    if (accepted.count === 0) {
+      throw new ConflictError(
+        ERROR_CODES.NEG_OFFER_ALREADY_ACCEPTED,
+        'Offer already accepted or not pending',
+      );
+    }
+
+    await tx.negotiationOffer.updateMany({
+      where: {
+        orderId: input.orderId,
+        id: { not: input.offerId },
+        status: 'pending',
+      },
+      data: { status: 'rejected' },
+    });
+
+    const acceptedOffer = await tx.negotiationOffer.findUniqueOrThrow({
+      where: { id: input.offerId },
+    });
+
+    await tx.order.update({
+      where: { id: input.orderId },
+      data: {
+        finalPrice: acceptedOffer.amount,
+        status: 'accepted',
+      },
+    });
+
+    const statusSeq = await nextSeq(tx, input.orderId);
+
+    await tx.statusEvent.create({
+      data: {
+        orderId: input.orderId,
+        fromStatus: 'negotiating',
+        toStatus: 'accepted',
+        actorUserId: input.userId,
+        actorRole: participantRole,
+        seq: statusSeq,
+      },
+    });
+
+    return {
+      offer: acceptedOffer,
+      finalPrice: acceptedOffer.amount,
+    };
+  });
+
+  await notificationService.notifyStatusChange(
+    { db: deps.db, logger: deps.logger },
+    {
+      orderId: input.orderId,
+      toStatus: 'accepted',
+      correlationId: randomUUID(),
+    },
+  );
+
+  return acceptedResult;
+}
+
+export async function listMessages(
+  deps: Deps,
+  input: {
+    orderId: string;
+    userId: string;
+    beforeSeq?: number;
+    limit?: number;
+  },
+) {
+  await checkParticipant(deps, input.userId, input.orderId);
+
+  const limit = Math.min(Math.max(input.limit ?? 30, 1), 100);
+  const rows = await deps.db.message.findMany({
+    where: {
+      orderId: input.orderId,
+      ...(input.beforeSeq ? { seq: { lt: input.beforeSeq } } : {}),
+    },
+    orderBy: { seq: 'desc' },
+    take: limit,
+  });
+
+  return rows.reverse();
+}
+
+export async function listOffers(
+  deps: Deps,
+  input: {
+    orderId: string;
+    userId: string;
+  },
+) {
+  await checkParticipant(deps, input.userId, input.orderId);
+
+  return deps.db.negotiationOffer.findMany({
+    where: { orderId: input.orderId },
+    orderBy: { seq: 'asc' },
+  });
+}
+
+export async function poll(
+  deps: Deps,
+  input: {
+    orderId: string;
+    userId: string;
+    afterSeq?: number;
+  },
+) {
+  await checkParticipant(deps, input.userId, input.orderId);
+
+  const after = input.afterSeq ?? 0;
+
   const [messages, offers, statusEvents] = await Promise.all([
-    prisma.message.findMany({
-      where: { orderId, seq: { gt: sinceSeq } },
+    deps.db.message.findMany({
+      where: { orderId: input.orderId, seq: { gt: after } },
       orderBy: { seq: 'asc' },
     }),
-    prisma.negotiationOffer.findMany({
-      where: { orderId, seq: { gt: sinceSeq } },
+    deps.db.negotiationOffer.findMany({
+      where: { orderId: input.orderId, seq: { gt: after } },
       orderBy: { seq: 'asc' },
     }),
-    prisma.statusEvent.findMany({
-      where: { orderId, seq: { gt: sinceSeq } },
+    deps.db.statusEvent.findMany({
+      where: { orderId: input.orderId, seq: { gt: after } },
       orderBy: { seq: 'asc' },
     }),
   ]);
 
-  // Find the max seq across all results for next poll cursor
-  let maxSeq = sinceSeq;
-  for (const m of messages) if (m.seq > maxSeq) maxSeq = m.seq;
-  for (const o of offers) if (o.seq > maxSeq) maxSeq = o.seq;
-  for (const s of statusEvents) if (s.seq > maxSeq) maxSeq = s.seq;
+  const lastSeq = Math.max(
+    after,
+    ...messages.map((message) => message.seq),
+    ...offers.map((offer) => offer.seq),
+    ...statusEvents.map((event) => event.seq),
+  );
 
-  return { messages, offers, statusEvents, lastSeq: maxSeq };
+  return {
+    messages,
+    offers,
+    statusEvents,
+    lastSeq,
+  };
 }

@@ -1,30 +1,73 @@
-import { prisma } from '../db';
-import { computePrice, isValidTransition, ServiceType } from '@babloo/shared';
-import type { PricingParams } from '@babloo/shared';
-import type { CleanType, TeamType } from '@prisma/client';
-import { AppError } from '../middleware/error.handler';
-import { ORDER } from '../constants/errors';
+import { randomUUID } from 'node:crypto';
+import {
+  canTransition,
+  computePrice,
+  type PricingParams,
+} from '@babloo/shared';
+import { ERROR_CODES } from '@babloo/shared/errors';
+import type {
+  ActorRole,
+  CleanType,
+  OrderStatus,
+  PrismaClient,
+  ServiceType,
+  TeamType,
+} from '@prisma/client';
+import type { Logger } from 'pino';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../lib/errors';
+import type { DbClient } from '../lib/prisma';
 import { matchPro } from './matching.service';
 import * as notificationService from './notification.service';
 
-// ── types ────────────────────────────────────────────────
+type Deps = {
+  db: PrismaClient;
+  logger: Logger;
+};
 
-interface CreateOrderInput {
-  serviceType: string;
+type CreateOrderInput = {
+  serviceType: ServiceType;
   location: string;
   scheduledStartAt?: string;
   detail: Record<string, unknown>;
-}
+};
 
-interface ListOrdersInput {
+type ListOrdersInput = {
   userId: string;
   cursor?: string;
   limit: number;
+};
+
+function encodeCursor(createdAt: Date, id: string): string {
+  return Buffer.from(JSON.stringify({ createdAt: createdAt.toISOString(), id })).toString(
+    'base64url',
+  );
 }
 
-// ── helpers ──────────────────────────────────────────────
+function decodeCursor(cursor: string) {
+  try {
+    const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
+      createdAt: string;
+      id: string;
+    };
 
-function extractPricingParams(serviceType: string, detail: Record<string, unknown>): PricingParams {
+    return {
+      createdAt: new Date(decoded.createdAt),
+      id: decoded.id,
+    };
+  } catch {
+    throw new ValidationError(ERROR_CODES.VALIDATION_ERROR, 'Invalid cursor');
+  }
+}
+
+function extractPricingParams(
+  serviceType: ServiceType,
+  detail: Record<string, unknown>,
+): PricingParams {
   switch (serviceType) {
     case 'menage':
       return {
@@ -41,49 +84,112 @@ function extractPricingParams(serviceType: string, detail: Record<string, unknow
         hours: detail.hours as number,
       } as PricingParams;
     default:
-      throw new AppError(400, 'VALIDATION_ERROR', ORDER.UNKNOWN_SERVICE(serviceType));
+      throw new ValidationError(
+        ERROR_CODES.ORDER_INVALID_SERVICE_DETAILS,
+        `Unknown service type: ${serviceType}`,
+      );
   }
 }
 
-function buildDetailData(serviceType: string, detail: Record<string, unknown>) {
+function buildDetailData(serviceType: ServiceType, detail: Record<string, unknown>) {
   switch (serviceType) {
     case 'menage':
       return {
         surface: detail.surface as number,
         cleanType: detail.cleanType as CleanType,
         teamType: detail.teamType as TeamType,
-        squadSize: (detail.squadSize as number) ?? null,
-        notes: (detail.notes as string) ?? null,
+        squadSize: (detail.squadSize as number | undefined) ?? null,
+        notes: (detail.notes as string | undefined) ?? null,
       };
     case 'cuisine':
       return {
         guests: detail.guests as number,
-        dishes: (detail.dishes as string) ?? null,
+        dishes: (detail.dishes as string | undefined) ?? null,
       };
     case 'childcare':
       return {
         children: detail.children as number,
         hours: detail.hours as number,
-        notes: (detail.notes as string) ?? null,
+        notes: (detail.notes as string | undefined) ?? null,
       };
     default:
-      throw new AppError(400, 'VALIDATION_ERROR', ORDER.UNKNOWN_SERVICE(serviceType));
+      throw new ValidationError(
+        ERROR_CODES.ORDER_INVALID_SERVICE_DETAILS,
+        `Unknown service type: ${serviceType}`,
+      );
   }
 }
 
-// ── create ───────────────────────────────────────────────
+async function nextStatusSeq(tx: DbClient, orderId: string) {
+  const latest = await tx.statusEvent.findFirst({
+    where: { orderId },
+    orderBy: { seq: 'desc' },
+    select: { seq: true },
+  });
 
-export async function create(userId: string, input: CreateOrderInput) {
-  const params = extractPricingParams(input.serviceType, input.detail);
-  const pricing = computePrice(input.serviceType as ServiceType, params);
+  return (latest?.seq ?? 0) + 1;
+}
+
+async function createStatusEvent(
+  tx: DbClient,
+  params: {
+    orderId: string;
+    fromStatus: OrderStatus;
+    toStatus: OrderStatus;
+    actorUserId: string;
+    actorRole: ActorRole;
+    reason?: string | null;
+  },
+) {
+  const seq = await nextStatusSeq(tx, params.orderId);
+  return tx.statusEvent.create({
+    data: {
+      ...params,
+      seq,
+      reason: params.reason ?? null,
+    },
+  });
+}
+
+async function getParticipantRole(deps: Deps, userId: string, orderId: string) {
+  const order = await deps.db.order.findUnique({
+    where: { id: orderId },
+    include: {
+      assignments: {
+        include: {
+          professional: true,
+        },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new NotFoundError(ERROR_CODES.ORDER_NOT_FOUND, 'Order not found');
+  }
+
+  if (order.clientId === userId) {
+    return { order, role: 'client' as const };
+  }
+
+  const assignment = order.assignments.find((a) => a.professional.userId === userId);
+  if (assignment) {
+    return { order, role: 'pro' as const };
+  }
+
+  throw new ForbiddenError(ERROR_CODES.ORDER_NOT_OWNED, 'Order not owned by user');
+}
+
+export async function create(deps: Deps, userId: string, input: CreateOrderInput) {
+  const pricingParams = extractPricingParams(input.serviceType, input.detail);
+  const pricing = computePrice(input.serviceType, pricingParams);
+
   let matchedProUserId: string | null = null;
 
-  const order = await prisma.$transaction(async (tx) => {
-    // 1. Create order in draft state
+  const order = await deps.db.$transaction(async (tx) => {
     const newOrder = await tx.order.create({
       data: {
         clientId: userId,
-        serviceType: input.serviceType as any,
+        serviceType: input.serviceType,
         status: 'draft',
         floorPrice: pricing.floorPrice,
         location: input.location,
@@ -91,7 +197,6 @@ export async function create(userId: string, input: CreateOrderInput) {
       },
     });
 
-    // 2. Create order detail
     await tx.orderDetail.create({
       data: {
         orderId: newOrder.id,
@@ -99,36 +204,36 @@ export async function create(userId: string, input: CreateOrderInput) {
       },
     });
 
-    // 3. StatusEvent: null → draft (creation event)
-    await tx.statusEvent.create({
-      data: {
-        orderId: newOrder.id,
-        fromStatus: 'draft',
-        toStatus: 'draft',
-        actorUserId: userId,
-        actorRole: 'client',
-      },
+    await createStatusEvent(tx, {
+      orderId: newOrder.id,
+      fromStatus: 'draft',
+      toStatus: 'draft',
+      actorUserId: userId,
+      actorRole: 'client',
     });
 
-    // 4. Transition draft → submitted
     await tx.order.update({
       where: { id: newOrder.id },
       data: { status: 'submitted' },
     });
 
-    // 5. StatusEvent: draft → submitted
-    await tx.statusEvent.create({
-      data: {
-        orderId: newOrder.id,
-        fromStatus: 'draft',
-        toStatus: 'submitted',
-        actorUserId: userId,
-        actorRole: 'client',
-      },
+    await createStatusEvent(tx, {
+      orderId: newOrder.id,
+      fromStatus: 'draft',
+      toStatus: 'submitted',
+      actorUserId: userId,
+      actorRole: 'client',
     });
 
     const selectedPro = await matchPro(
-      { serviceType: newOrder.serviceType, location: newOrder.location },
+      { db: deps.db, logger: deps.logger },
+      {
+        serviceType: newOrder.serviceType,
+        location: newOrder.location,
+        detail: {
+          teamType: (input.detail.teamType as string | undefined) ?? null,
+        },
+      },
       tx,
     );
 
@@ -140,14 +245,12 @@ export async function create(userId: string, input: CreateOrderInput) {
         data: { status: 'searching' },
       });
 
-      await tx.statusEvent.create({
-        data: {
-          orderId: newOrder.id,
-          fromStatus: 'submitted',
-          toStatus: 'searching',
-          actorUserId: userId,
-          actorRole: 'client',
-        },
+      await createStatusEvent(tx, {
+        orderId: newOrder.id,
+        fromStatus: 'submitted',
+        toStatus: 'searching',
+        actorUserId: userId,
+        actorRole: 'client',
       });
 
       await tx.orderAssignment.create({
@@ -164,14 +267,12 @@ export async function create(userId: string, input: CreateOrderInput) {
         data: { status: 'negotiating' },
       });
 
-      await tx.statusEvent.create({
-        data: {
-          orderId: newOrder.id,
-          fromStatus: 'searching',
-          toStatus: 'negotiating',
-          actorUserId: userId,
-          actorRole: 'client',
-        },
+      await createStatusEvent(tx, {
+        orderId: newOrder.id,
+        fromStatus: 'searching',
+        toStatus: 'negotiating',
+        actorUserId: userId,
+        actorRole: 'client',
       });
     }
 
@@ -181,13 +282,6 @@ export async function create(userId: string, input: CreateOrderInput) {
         detail: true,
         statusEvents: { orderBy: { seq: 'asc' } },
         rating: true,
-        client: {
-          select: {
-            id: true,
-            fullName: true,
-            avatarUrl: true,
-          },
-        },
         assignments: {
           include: {
             professional: {
@@ -202,12 +296,26 @@ export async function create(userId: string, input: CreateOrderInput) {
   });
 
   if (matchedProUserId) {
-    notificationService.notifyNewOffer(order.id, matchedProUserId).catch(console.error);
+    deps.logger.info({ orderId: order.id, matchedProUserId }, 'Order matched to pro');
+    await notificationService.notifyNewOffer(
+      { db: deps.db, logger: deps.logger },
+      {
+        orderId: order.id,
+        proUserId: matchedProUserId,
+        correlationId: randomUUID(),
+      },
+    );
 
     if (order.scheduledStartAt) {
-      notificationService
-        .scheduleServiceReminder(order.id, matchedProUserId, order.scheduledStartAt)
-        .catch(console.error);
+      await notificationService.scheduleServiceReminder(
+        { db: deps.db, logger: deps.logger },
+        {
+          orderId: order.id,
+          proUserId: matchedProUserId,
+          scheduledStartAt: order.scheduledStartAt,
+          correlationId: randomUUID(),
+        },
+      );
     }
   }
 
@@ -221,50 +329,50 @@ export async function create(userId: string, input: CreateOrderInput) {
   };
 }
 
-// ── list ─────────────────────────────────────────────────
+export async function list(deps: Deps, input: ListOrdersInput) {
+  const limit = Math.min(Math.max(input.limit, 1), 50);
+  const where = input.cursor
+    ? (() => {
+        const cursor = decodeCursor(input.cursor);
+        return {
+          clientId: input.userId,
+          OR: [
+            { createdAt: { lt: cursor.createdAt } },
+            {
+              createdAt: cursor.createdAt,
+              id: { lt: cursor.id },
+            },
+          ],
+        };
+      })()
+    : { clientId: input.userId };
 
-export async function list(input: ListOrdersInput) {
-  const take = input.limit + 1; // fetch one extra to determine hasMore
-
-  const orders = await prisma.order.findMany({
-    where: { clientId: input.userId },
-    orderBy: { createdAt: 'desc' },
-    take,
-    ...(input.cursor
-      ? {
-          cursor: { id: input.cursor },
-          skip: 1, // skip the cursor itself
-        }
-      : {}),
+  const rows = await deps.db.order.findMany({
+    where,
+    take: limit + 1,
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     include: { detail: true },
   });
 
-  const hasMore = orders.length > input.limit;
-  const data = hasMore ? orders.slice(0, input.limit) : orders;
-  const nextCursor = hasMore ? data[data.length - 1].id : undefined;
+  const hasNext = rows.length > limit;
+  const items = hasNext ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1] ?? null;
 
-  return { data, cursor: nextCursor, hasMore };
+  return {
+    items,
+    nextCursor: last ? encodeCursor(last.createdAt, last.id) : null,
+  };
 }
 
-// ── getById ──────────────────────────────────────────────
+export async function getById(deps: Deps, userId: string, orderId: string) {
+  await getParticipantRole(deps, userId, orderId);
 
-export async function getById(userId: string, orderId: string) {
-  const { checkParticipant } = await import('../services/negotiation.service');
-  await checkParticipant(userId, orderId);
-
-  const order = await prisma.order.findUnique({
+  return deps.db.order.findUniqueOrThrow({
     where: { id: orderId },
     include: {
       detail: true,
       statusEvents: { orderBy: { seq: 'asc' } },
       rating: true,
-      client: {
-        select: {
-          id: true,
-          fullName: true,
-          avatarUrl: true,
-        },
-      },
       assignments: {
         include: {
           professional: {
@@ -276,78 +384,120 @@ export async function getById(userId: string, orderId: string) {
       },
     },
   });
-
-  if (!order) {
-    throw new AppError(404, 'NOT_FOUND', ORDER.NOT_FOUND);
-  }
-
-  return order;
 }
 
-// ── cancel ───────────────────────────────────────────────
-
-export async function cancel(userId: string, orderId: string, reason?: string) {
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+export async function cancel(
+  deps: Deps,
+  userId: string,
+  orderId: string,
+  reason?: string,
+) {
+  const order = await deps.db.order.findUnique({ where: { id: orderId } });
 
   if (!order || order.clientId !== userId) {
-    throw new AppError(404, 'NOT_FOUND', ORDER.NOT_FOUND);
+    throw new NotFoundError(ERROR_CODES.ORDER_NOT_FOUND, 'Order not found');
   }
 
-  if (!isValidTransition(order.status as any, 'cancelled' as any)) {
-    throw new AppError(409, 'INVALID_TRANSITION', ORDER.CANNOT_CANCEL);
+  if (!canTransition(order.status, 'cancelled')) {
+    throw new ConflictError(ERROR_CODES.ORDER_INVALID_TRANSITION, 'Invalid order transition');
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
+  return deps.db.$transaction(async (tx) => {
     const cancelled = await tx.order.update({
       where: { id: orderId },
       data: { status: 'cancelled' },
       include: { detail: true },
     });
 
-    await tx.statusEvent.create({
-      data: {
-        orderId,
-        fromStatus: order.status,
-        toStatus: 'cancelled',
-        actorUserId: userId,
-        actorRole: 'client',
-        reason: reason ?? null,
-      },
+    await createStatusEvent(tx, {
+      orderId,
+      fromStatus: order.status,
+      toStatus: 'cancelled',
+      actorUserId: userId,
+      actorRole: 'client',
+      reason,
     });
 
     return cancelled;
   });
-
-  return updated;
 }
 
-// ── submitRating ────────────────────────────────────────
+export async function updateStatus(
+  deps: Deps,
+  userId: string,
+  orderId: string,
+  toStatus: OrderStatus,
+  reason?: string,
+) {
+  const { order, role } = await getParticipantRole(deps, userId, orderId);
 
-export async function submitRating(
+  if (role !== 'pro') {
+    throw new ForbiddenError(ERROR_CODES.AUTH_FORBIDDEN, 'Only pro can update status');
+  }
+
+  if (!canTransition(order.status, toStatus)) {
+    throw new ConflictError(ERROR_CODES.ORDER_INVALID_TRANSITION, 'Invalid order transition');
+  }
+
+  const updatedOrder = await deps.db.$transaction(async (tx) => {
+    const updatedOrder = await tx.order.update({
+      where: { id: orderId },
+      data: { status: toStatus },
+      include: { detail: true },
+    });
+
+    await createStatusEvent(tx, {
+      orderId,
+      fromStatus: order.status,
+      toStatus,
+      actorUserId: userId,
+      actorRole: 'pro',
+      reason,
+    });
+
+    return updatedOrder;
+  });
+
+  await notificationService.notifyStatusChange(
+    { db: deps.db, logger: deps.logger },
+    {
+      orderId,
+      toStatus,
+      correlationId: randomUUID(),
+    },
+  );
+
+  return updatedOrder;
+}
+
+export async function rate(
+  deps: Deps,
   userId: string,
   orderId: string,
   stars: number,
   comment?: string,
 ) {
-  const order = await prisma.order.findUnique({
+  const order = await deps.db.order.findUnique({
     where: { id: orderId },
-    include: { rating: true, assignments: true },
+    include: {
+      rating: true,
+      assignments: true,
+    },
   });
 
   if (!order || order.clientId !== userId) {
-    throw new AppError(404, 'NOT_FOUND', ORDER.NOT_FOUND);
+    throw new NotFoundError(ERROR_CODES.ORDER_NOT_FOUND, 'Order not found');
   }
 
   if (order.status !== 'completed') {
-    throw new AppError(409, 'INVALID_STATE', ORDER.NOT_COMPLETED);
+    throw new ConflictError(ERROR_CODES.ORDER_NOT_COMPLETED, 'Order is not completed');
   }
 
   if (order.rating) {
-    throw new AppError(409, 'ALREADY_RATED', ORDER.ALREADY_RATED);
+    throw new ConflictError(ERROR_CODES.ORDER_ALREADY_RATED, 'Order already rated');
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    // 1. Create rating
+  return deps.db.$transaction(async (tx) => {
     const rating = await tx.rating.create({
       data: {
         orderId,
@@ -357,70 +507,28 @@ export async function submitRating(
       },
     });
 
-    // 2. Update professional stats (weighted average rating + totalSessions)
     for (const assignment of order.assignments) {
-      const pro = await tx.professional.findUnique({
+      const professional = await tx.professional.findUnique({
         where: { id: assignment.professionalId },
       });
-      if (pro) {
-        const newTotal = pro.totalSessions + 1;
-        const newRating = (pro.rating * pro.totalSessions + stars) / newTotal;
-        await tx.professional.update({
-          where: { id: pro.id },
-          data: {
-            rating: Math.round(newRating * 100) / 100,
-            totalSessions: newTotal,
-          },
-        });
+
+      if (!professional) {
+        continue;
       }
+
+      const newTotal = professional.totalSessions + 1;
+      const newRating =
+        (professional.rating * professional.totalSessions + stars) / newTotal;
+
+      await tx.professional.update({
+        where: { id: professional.id },
+        data: {
+          rating: Math.round(newRating * 100) / 100,
+          totalSessions: newTotal,
+        },
+      });
     }
 
     return rating;
   });
-
-  return result;
-}
-
-// ── updateStatus (pro) ──────────────────────────────────
-
-export async function updateStatus(
-  userId: string,
-  orderId: string,
-  toStatus: string,
-  reason?: string,
-) {
-  // Import checkParticipant lazily to avoid circular deps
-  const { checkParticipant } = await import('../services/negotiation.service');
-  const { order, participantRole } = await checkParticipant(userId, orderId);
-
-  if (participantRole !== 'pro') {
-    throw new AppError(403, 'FORBIDDEN', ORDER.PRO_ONLY_STATUS);
-  }
-
-  if (!isValidTransition(order.status as any, toStatus as any)) {
-    throw new AppError(409, 'INVALID_TRANSITION', ORDER.INVALID_TRANSITION);
-  }
-
-  const updated = await prisma.$transaction(async (tx) => {
-    const updatedOrder = await tx.order.update({
-      where: { id: orderId },
-      data: { status: toStatus as any },
-      include: { detail: true },
-    });
-
-    await tx.statusEvent.create({
-      data: {
-        orderId,
-        fromStatus: order.status,
-        toStatus: toStatus as any,
-        actorUserId: userId,
-        actorRole: participantRole,
-        reason: reason ?? null,
-      },
-    });
-
-    return updatedOrder;
-  });
-
-  return updated;
 }

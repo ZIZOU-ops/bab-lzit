@@ -1,7 +1,13 @@
-import type { Prisma, Professional } from '@prisma/client';
-import { prisma } from '../db';
+import type { Prisma, Professional, ServiceType } from '@prisma/client';
+import type { Logger } from 'pino';
+import type { PrismaClient } from '@prisma/client';
 
-type DbClient = Prisma.TransactionClient | typeof prisma;
+type Deps = {
+  db: PrismaClient;
+  logger: Logger;
+};
+
+type DbClient = Prisma.TransactionClient | PrismaClient;
 
 function normalizeToken(input: string) {
   return input
@@ -13,55 +19,54 @@ function normalizeToken(input: string) {
 
 function extractZoneTokens(location: string) {
   return location
-    .split(/[,\s-]+/g)
+    .split(/[\s,-]+/g)
     .map((token) => normalizeToken(token))
     .filter(Boolean);
 }
 
 export async function matchPro(
+  deps: Deps,
   order: {
-    serviceType: string;
+    serviceType: ServiceType;
     location: string;
     detail?: {
       teamType?: string | null;
     } | null;
   },
-  db: DbClient = prisma,
+  dbClient?: DbClient,
 ): Promise<Professional | null> {
+  const db = dbClient ?? deps.db;
+
   let teamType = order.detail?.teamType?.toLowerCase() ?? null;
+
   if (!teamType) {
-    // Fallback heuristic: infer from the latest in-flight order with the same service/location.
-    // This can mis-associate in dense areas but keeps WS12 behavior without changing order.service.ts.
-    const matchingOrder = await db.order.findFirst({
+    const recentOrder = await db.order.findFirst({
       where: {
-        serviceType: order.serviceType as any,
+        serviceType: order.serviceType,
         location: order.location,
         status: { in: ['submitted', 'searching', 'negotiating'] },
       },
       orderBy: { createdAt: 'desc' },
       select: {
         detail: {
-          select: {
-            teamType: true,
-          },
+          select: { teamType: true },
         },
       },
     });
-    teamType = matchingOrder?.detail?.teamType?.toLowerCase() ?? null;
+
+    teamType = recentOrder?.detail?.teamType?.toLowerCase() ?? null;
   }
 
   const requireTeamLead = teamType === 'duo' || teamType === 'squad';
   const zoneTokens = extractZoneTokens(order.location);
+
   const prosBySkill = await db.professional.findMany({
     where: {
       isAvailable: true,
       ...(requireTeamLead ? { isTeamLead: true } : {}),
-      skills: { has: order.serviceType as any },
+      skills: { has: order.serviceType },
     },
-    orderBy: [
-      { reliability: 'desc' },
-      { rating: 'desc' },
-    ],
+    orderBy: [{ reliability: 'desc' }, { rating: 'desc' }],
   });
 
   const zoneMatch = prosBySkill.find((pro) => {
@@ -70,18 +75,23 @@ export async function matchPro(
   });
 
   const selected = zoneMatch ?? prosBySkill[0] ?? null;
+
   if (selected) {
+    deps.logger.info({ order, proId: selected.id }, 'Matched professional');
     return selected;
   }
 
-  return db.professional.findFirst({
+  const fallback = await db.professional.findFirst({
     where: {
       isAvailable: true,
       ...(requireTeamLead ? { isTeamLead: true } : {}),
     },
-    orderBy: [
-      { reliability: 'desc' },
-      { rating: 'desc' },
-    ],
+    orderBy: [{ reliability: 'desc' }, { rating: 'desc' }],
   });
+
+  if (fallback) {
+    deps.logger.info({ order, proId: fallback.id }, 'Matched professional via fallback');
+  }
+
+  return fallback;
 }

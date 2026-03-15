@@ -30,4 +30,5 @@ export {
   MIN_SQUAD_PAY_PER_EMPLOYEE_MAD,
   NEGOTIATION_CEILING_MULTIPLIER,
   NEGOTIATION_INCREMENT,
+  isValidOfferAmount,
 } from './types';

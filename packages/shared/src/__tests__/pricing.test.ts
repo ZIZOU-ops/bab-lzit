@@ -3,7 +3,7 @@ import { computeMenagePrice } from '../pricing/menage';
 import { computeCuisinePrice } from '../pricing/cuisine';
 import { computeChildcarePrice } from '../pricing/childcare';
 import { computePrice } from '../pricing';
-import { CleanType, TeamType, ServiceType } from '../types/enums';
+import { ServiceType } from '../types/enums';
 
 describe('Ménage pricing', () => {
   // Surface bracket boundaries

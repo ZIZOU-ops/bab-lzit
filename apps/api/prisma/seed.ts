@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding database...');
+  process.stdout.write('Seeding database...\n');
 
   const passwordHash = await bcrypt.hash('password123', 12);
 
@@ -149,11 +149,11 @@ async function main() {
     },
   });
 
-  console.log('Seed complete.');
-  console.log('Test accounts (password: password123):');
-  console.log('  Clients: client1@babloo.test, client2@babloo.test, client3@babloo.test');
-  console.log('  Pros: pro1@babloo.test, pro2@babloo.test, pro3@babloo.test');
-  console.log('  Admin: admin@babloo.test');
+  process.stdout.write('Seed complete.\n');
+  process.stdout.write('Test accounts (password: password123):\n');
+  process.stdout.write('  Clients: client1@babloo.test, client2@babloo.test, client3@babloo.test\n');
+  process.stdout.write('  Pros: pro1@babloo.test, pro2@babloo.test, pro3@babloo.test\n');
+  process.stdout.write('  Admin: admin@babloo.test\n');
 }
 
 main()
