@@ -27,4 +27,4 @@ RUN node -e "const fs=require('fs'),p='packages/shared/package.json',j=JSON.pars
 RUN pnpm --filter @babloo/api build
 
 EXPOSE 3000
-CMD ["sh", "-c", "pnpm --filter @babloo/api db:migrate:deploy && node apps/api/dist/server.js"]
+CMD ["sh", "-c", "pnpm --filter @babloo/api db:migrate:deploy && npx tsx apps/api/src/server.ts"]
