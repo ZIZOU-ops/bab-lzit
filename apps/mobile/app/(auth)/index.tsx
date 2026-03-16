@@ -1,18 +1,25 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, LayoutChangeEvent, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import ReanimatedAnimated, { FadeIn } from 'react-native-reanimated';
 import { Button, Card } from '../../src/components/ui';
-import { colors, radius, shadows, spacing, textStyles } from '../../src/constants/theme';
+import { AnimatedAuthHeader } from '../../src/components/AnimatedAuthHeader';
+import { colors, fonts, radius, shadows, spacing, textStyles } from '../../src/constants/theme';
 
 type AuthMode = 'signIn' | 'signUp';
-const TAB_WIDTH = (spacing.lg * 10 + spacing.md) / 2;
 
 export default function AuthEntryScreen() {
   const { t } = useTranslation();
   const [mode, setMode] = useState<AuthMode>('signIn');
+  const [tabWidth, setTabWidth] = useState(0);
   const indicator = useRef(new Animated.Value(0)).current;
+
+  const onTabsLayout = useCallback((e: LayoutChangeEvent) => {
+    const innerWidth = e.nativeEvent.layout.width - spacing.xs * 2;
+    setTabWidth(innerWidth / 2);
+  }, []);
 
   useEffect(() => {
     Animated.spring(indicator, {
@@ -56,100 +63,100 @@ export default function AuthEntryScreen() {
     ];
   }, [mode, t]);
 
-  const translateX = indicator.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.hero}>
-        <View style={[styles.heroBlob, styles.heroBlobA]} />
-        <View style={[styles.heroBlob, styles.heroBlobB]} />
-        <View style={[styles.heroBlob, styles.heroBlobC]} />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <AnimatedAuthHeader />
+        <ReanimatedAnimated.Text
+          entering={FadeIn.delay(500).duration(800)}
+          style={styles.slogan}
+        >
+          {'Babloo g\u00e8re.\nTu n\u2019as rien \u00e0 faire.'}
+        </ReanimatedAnimated.Text>
 
-        <View style={styles.logoWrap}>
-          <View style={styles.logoGlass}>
-            <Text style={styles.logoLetter}>B</Text>
-          </View>
-          <Text style={styles.heroTitle}>{t('home.title')}</Text>
-          <Text style={styles.heroSubtitle}>{t('auth.moroccoSubtitle')}</Text>
-        </View>
-      </View>
-
-      <Card style={styles.card}>
-        <View style={styles.tabs}>
-          <Animated.View
-            style={[
-              styles.tabIndicator,
-              {
-                transform: [
+        {/* ── Auth card ── */}
+        <Card style={styles.card}>
+          {/* Tabs */}
+          <View style={styles.tabs} onLayout={onTabsLayout}>
+            {tabWidth > 0 && (
+              <Animated.View
+                style={[
+                  styles.tabIndicator,
                   {
-                    translateX: translateX.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, TAB_WIDTH],
-                    }),
+                    width: tabWidth,
+                    transform: [
+                      {
+                        translateX: indicator.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, tabWidth],
+                        }),
+                      },
+                    ],
                   },
-                ],
-              },
-            ]}
-          />
+                ]}
+              />
+            )}
 
-          <Pressable
-            style={styles.tabBtn}
-            onPress={() => setMode('signIn')}
-          >
-            <Text style={[styles.tabText, mode === 'signIn' && styles.tabTextActive]}>{t('auth.signInTab')}</Text>
-          </Pressable>
-          <Pressable
-            style={styles.tabBtn}
-            onPress={() => setMode('signUp')}
-          >
-            <Text style={[styles.tabText, mode === 'signUp' && styles.tabTextActive]}>{t('auth.signUpTab')}</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.methods}>
-          {methods.map((method) => (
-            <Pressable
-              key={method.key}
-              style={({ pressed }) => [styles.methodBtn, pressed && styles.pressed]}
-              onPress={method.onPress}
-            >
-              <View style={styles.methodIcon}>{method.icon}</View>
-              <Text style={styles.methodLabel}>{method.label}</Text>
-              <Ionicons name="chevron-forward" size={spacing.lg} color={colors.textMuted} />
+            <Pressable style={styles.tabBtn} onPress={() => setMode('signIn')}>
+              <Text style={[styles.tabText, mode === 'signIn' && styles.tabTextActive]}>
+                {t('auth.signInTab')}
+              </Text>
             </Pressable>
-          ))}
-        </View>
+            <Pressable style={styles.tabBtn} onPress={() => setMode('signUp')}>
+              <Text style={[styles.tabText, mode === 'signUp' && styles.tabTextActive]}>
+                {t('auth.signUpTab')}
+              </Text>
+            </Pressable>
+          </View>
 
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>{t('auth.or')}</Text>
-          <View style={styles.dividerLine} />
-        </View>
+          {/* Methods */}
+          <View style={styles.methods}>
+            {methods.map((method) => (
+              <Pressable
+                key={method.key}
+                style={({ pressed }) => [styles.methodBtn, pressed && styles.pressed]}
+                onPress={method.onPress}
+              >
+                <View style={styles.methodIcon}>{method.icon}</View>
+                <Text style={styles.methodLabel}>{method.label}</Text>
+                <Ionicons name="chevron-forward" size={spacing.lg} color={colors.textMuted} />
+              </Pressable>
+            ))}
+          </View>
 
-        <View style={styles.ssoRow}>
-          <Button
-            variant="outline"
-            label={t('auth.continueGoogle')}
-            onPress={() => undefined}
-            icon={<Ionicons name="logo-google" size={spacing.md + spacing.xs} color={colors.navy} />}
-            style={styles.ssoBtn}
-          />
-          <Button
-            variant="primary"
-            label={t('auth.continueApple')}
-            onPress={() => undefined}
-            icon={<Ionicons name="logo-apple" size={spacing.md + spacing.xs} color={colors.white} />}
-            style={styles.ssoBtn}
-          />
-        </View>
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>{t('auth.or')}</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
-        <Text style={styles.legal}>
-          {t('auth.legal')}
-        </Text>
-      </Card>
+          {/* SSO */}
+          <View style={styles.ssoRow}>
+            <Button
+              variant="outline"
+              label={t('auth.continueGoogle')}
+              onPress={() => undefined}
+              icon={<Ionicons name="logo-google" size={spacing.md + spacing.xs} color={colors.navy} />}
+              style={styles.ssoBtn}
+            />
+            <Button
+              variant="primary"
+              label={t('auth.continueApple')}
+              onPress={() => undefined}
+              icon={<Ionicons name="logo-apple" size={spacing.md + spacing.xs} color={colors.white} />}
+              style={styles.ssoBtn}
+            />
+          </View>
+
+          {/* Legal */}
+          <Text style={styles.legal}>{t('auth.legal')}</Text>
+        </Card>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -159,76 +166,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  hero: {
-    height: '42%',
-    backgroundColor: colors.navy,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: spacing['2xl'],
   },
-  heroBlob: {
-    position: 'absolute',
-    borderRadius: radius.full,
+
+  /* ── Slogan ── */
+  slogan: {
+    fontFamily: fonts.dmSans.regular,
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.textSec,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
   },
-  heroBlobA: {
-    width: spacing['2xl'] * 5,
-    height: spacing['2xl'] * 5,
-    top: -spacing['2xl'],
-    left: -spacing.lg,
-    backgroundColor: colors.clayA24,
-  },
-  heroBlobB: {
-    width: spacing['2xl'] * 4,
-    height: spacing['2xl'] * 4,
-    right: -spacing.xl,
-    top: spacing.lg,
-    backgroundColor: colors.whiteA12,
-  },
-  heroBlobC: {
-    width: spacing['2xl'] * 3,
-    height: spacing['2xl'] * 3,
-    bottom: -spacing.lg,
-    left: spacing['2xl'],
-    backgroundColor: colors.clayA18,
-  },
-  logoWrap: {
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  logoGlass: {
-    width: spacing['2xl'] * 2,
-    height: spacing['2xl'] * 2,
-    borderRadius: radius.full,
-    backgroundColor: colors.whiteA12,
-    borderWidth: 1.5,
-    borderColor: colors.whiteA60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    color: colors.white,
-    fontFamily: 'Fraunces_700Bold',
-    fontSize: 38,
-  },
-  heroTitle: {
-    ...textStyles.display,
-    color: colors.white,
-    fontSize: 44,
-    lineHeight: 52,
-  },
-  heroSubtitle: {
-    ...textStyles.body,
-    color: colors.whiteA70,
-    fontSize: 14,
-  },
+
+  /* ── Card ── */
   card: {
     marginHorizontal: spacing.lg,
-    marginTop: -(spacing['2xl'] + spacing.sm),
     borderRadius: radius.xl,
     padding: spacing.lg,
     gap: spacing.md,
     ...shadows.md,
   },
+
+  /* ── Tabs ── */
   tabs: {
     backgroundColor: colors.bgAlt,
     borderRadius: radius.full,
@@ -240,7 +202,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.xs,
     left: spacing.xs,
-    width: TAB_WIDTH,
     bottom: spacing.xs,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
@@ -259,6 +220,8 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: colors.navy,
   },
+
+  /* ── Methods ── */
   methods: {
     gap: spacing.sm,
   },
@@ -285,8 +248,10 @@ const styles = StyleSheet.create({
     ...textStyles.body,
     color: colors.navy,
     flex: 1,
-    fontFamily: 'DMSans_600SemiBold',
+    fontFamily: fonts.dmSans.semiBold,
   },
+
+  /* ── Divider ── */
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -301,12 +266,16 @@ const styles = StyleSheet.create({
     ...textStyles.body,
     color: colors.textMuted,
   },
+
+  /* ── SSO ── */
   ssoRow: {
     gap: spacing.sm,
   },
   ssoBtn: {
     width: '100%',
   },
+
+  /* ── Legal ── */
   legal: {
     ...textStyles.body,
     color: colors.textMuted,
@@ -314,6 +283,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
   },
+
   pressed: {
     transform: [{ scale: 0.97 }],
   },
