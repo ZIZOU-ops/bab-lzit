@@ -5,6 +5,7 @@ import Animated, {
   Easing,
   SharedValue,
   useAnimatedProps,
+  useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
@@ -162,42 +163,49 @@ interface AnimatedAuthHeaderProps {
   scrollY?: SharedValue<number>;
 }
 
-export function AnimatedAuthHeader(_props: AnimatedAuthHeaderProps) {
+export function AnimatedAuthHeader({ scrollY }: AnimatedAuthHeaderProps) {
+  const parallaxStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: (scrollY?.value ?? 0) * 0.3 }],
+  }));
+
   return (
     <View style={styles.container}>
-      {/* Back layer blobs */}
-      <Svg
-        style={[StyleSheet.absoluteFill, styles.blobLayer]}
-        width={SCREEN_WIDTH}
-        height={CONTAINER_HEIGHT}
-      >
-        {BACK_BLOBS.map((blob) => (
-          <AnimatedBlob
-            key={blob.id}
-            config={blob}
-            centerX={CENTER_X}
-            centerY={CENTER_Y}
-          />
-        ))}
-      </Svg>
+      {/* Parallax wrapper for blobs */}
+      <Animated.View style={[StyleSheet.absoluteFill, parallaxStyle]}>
+        {/* Back layer blobs */}
+        <Svg
+          style={[StyleSheet.absoluteFill, styles.blobLayer]}
+          width={SCREEN_WIDTH}
+          height={CONTAINER_HEIGHT}
+        >
+          {BACK_BLOBS.map((blob) => (
+            <AnimatedBlob
+              key={blob.id}
+              config={blob}
+              centerX={CENTER_X}
+              centerY={CENTER_Y}
+            />
+          ))}
+        </Svg>
 
-      {/* Front layer blobs */}
-      <Svg
-        style={[StyleSheet.absoluteFill, styles.blobLayer]}
-        width={SCREEN_WIDTH}
-        height={CONTAINER_HEIGHT}
-      >
-        {FRONT_BLOBS.map((blob) => (
-          <AnimatedBlob
-            key={blob.id}
-            config={blob}
-            centerX={CENTER_X}
-            centerY={CENTER_Y}
-          />
-        ))}
-      </Svg>
+        {/* Front layer blobs */}
+        <Svg
+          style={[StyleSheet.absoluteFill, styles.blobLayer]}
+          width={SCREEN_WIDTH}
+          height={CONTAINER_HEIGHT}
+        >
+          {FRONT_BLOBS.map((blob) => (
+            <AnimatedBlob
+              key={blob.id}
+              config={blob}
+              centerX={CENTER_X}
+              centerY={CENTER_Y}
+            />
+          ))}
+        </Svg>
+      </Animated.View>
 
-      {/* Logo */}
+      {/* Logo — not in parallax wrapper, moves with content */}
       <View style={styles.logoContainer}>
         <BablooLogo size={72} color={colors.navy} />
       </View>

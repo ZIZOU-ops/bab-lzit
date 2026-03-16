@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, LayoutChangeEvent, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import ReanimatedAnimated, { FadeIn } from 'react-native-reanimated';
+import ReanimatedAnimated, {
+  FadeIn,
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { Button, Card } from '../../src/components/ui';
 import { AnimatedAuthHeader } from '../../src/components/AnimatedAuthHeader';
 import { colors, fonts, radius, shadows, spacing, textStyles } from '../../src/constants/theme';
@@ -15,6 +19,12 @@ export default function AuthEntryScreen() {
   const [mode, setMode] = useState<AuthMode>('signIn');
   const [tabWidth, setTabWidth] = useState(0);
   const indicator = useRef(new Animated.Value(0)).current;
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
 
   const onTabsLayout = useCallback((e: LayoutChangeEvent) => {
     const innerWidth = e.nativeEvent.layout.width - spacing.xs * 2;
@@ -65,12 +75,14 @@ export default function AuthEntryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
+      <ReanimatedAnimated.ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
       >
-        <AnimatedAuthHeader />
+        <AnimatedAuthHeader scrollY={scrollY} />
         <ReanimatedAnimated.Text
           entering={FadeIn.delay(500).duration(800)}
           style={styles.slogan}
@@ -156,7 +168,7 @@ export default function AuthEntryScreen() {
           {/* Legal */}
           <Text style={styles.legal}>{t('auth.legal')}</Text>
         </Card>
-      </ScrollView>
+      </ReanimatedAnimated.ScrollView>
     </SafeAreaView>
   );
 }
