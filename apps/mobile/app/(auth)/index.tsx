@@ -87,7 +87,7 @@ export default function AuthEntryScreen() {
           entering={FadeIn.delay(500).duration(800)}
           style={styles.slogan}
         >
-          {'Babloo g\u00e8re.\nTu n\u2019as rien \u00e0 faire.'}
+          {t('auth.slogan')}
         </ReanimatedAnimated.Text>
 
         {/* ── Auth card ── */}

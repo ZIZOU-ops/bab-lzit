@@ -124,6 +124,7 @@ function AnimatedBlob({ config, centerX, centerY }: AnimatedBlobProps) {
       -1,
       false,
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const animatedProps = useAnimatedProps(() => {
@@ -170,11 +171,10 @@ export function AnimatedAuthHeader({ scrollY }: AnimatedAuthHeaderProps) {
 
   return (
     <View style={styles.container}>
-      {/* Parallax wrapper for blobs */}
+      {/* Parallax wrapper for blobs — single SVG, back blobs first then front */}
       <Animated.View style={[StyleSheet.absoluteFill, parallaxStyle]}>
-        {/* Back layer blobs */}
         <Svg
-          style={[StyleSheet.absoluteFill, styles.blobLayer]}
+          style={StyleSheet.absoluteFill}
           width={SCREEN_WIDTH}
           height={CONTAINER_HEIGHT}
         >
@@ -186,14 +186,6 @@ export function AnimatedAuthHeader({ scrollY }: AnimatedAuthHeaderProps) {
               centerY={CENTER_Y}
             />
           ))}
-        </Svg>
-
-        {/* Front layer blobs */}
-        <Svg
-          style={[StyleSheet.absoluteFill, styles.blobLayer]}
-          width={SCREEN_WIDTH}
-          height={CONTAINER_HEIGHT}
-        >
           {FRONT_BLOBS.map((blob) => (
             <AnimatedBlob
               key={blob.id}
@@ -231,9 +223,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-  },
-  blobLayer: {
-    zIndex: 0,
   },
   logoContainer: {
     width: 96,
