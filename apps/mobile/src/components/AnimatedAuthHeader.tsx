@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BablooLogo } from './BablooLogo';
-import { colors, radius, shadows } from '../constants/theme';
+import { colors } from '../constants/theme';
 
 const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
 
@@ -43,10 +43,10 @@ interface BlobConfig {
 const BACK_BLOBS: BlobConfig[] = [
   {
     id: 'a1',
-    rx: 70,
-    ry: 70,
+    rx: 90,
+    ry: 90,
     color: colors.navy,
-    opacity: 0.07,
+    opacity: 0.18,
     orbitRx: 110,
     orbitRy: 100,
     period: 14000,
@@ -54,10 +54,10 @@ const BACK_BLOBS: BlobConfig[] = [
   },
   {
     id: 'a2',
-    rx: 60,
-    ry: 55,
+    rx: 78,
+    ry: 72,
     color: colors.textSec,
-    opacity: 0.06,
+    opacity: 0.15,
     orbitRx: 90,
     orbitRy: 120,
     period: 18000,
@@ -65,10 +65,10 @@ const BACK_BLOBS: BlobConfig[] = [
   },
   {
     id: 'a3',
-    rx: 50,
-    ry: 50,
+    rx: 65,
+    ry: 65,
     color: colors.clay,
-    opacity: 0.05,
+    opacity: 0.12,
     orbitRx: 100,
     orbitRy: 80,
     period: 16000,
@@ -79,10 +79,10 @@ const BACK_BLOBS: BlobConfig[] = [
 const FRONT_BLOBS: BlobConfig[] = [
   {
     id: 'b1',
-    rx: 30,
-    ry: 30,
+    rx: 40,
+    ry: 40,
     color: colors.navy,
-    opacity: 0.1,
+    opacity: 0.25,
     orbitRx: 70,
     orbitRy: 65,
     period: 8000,
@@ -91,10 +91,10 @@ const FRONT_BLOBS: BlobConfig[] = [
   },
   {
     id: 'b2',
-    rx: 25,
-    ry: 22,
+    rx: 33,
+    ry: 29,
     color: colors.clay,
-    opacity: 0.08,
+    opacity: 0.20,
     orbitRx: 80,
     orbitRy: 50,
     period: 10000,
@@ -197,14 +197,15 @@ export function AnimatedAuthHeader({ scrollY }: AnimatedAuthHeaderProps) {
         </Svg>
       </Animated.View>
 
-      {/* Logo — not in parallax wrapper, moves with content */}
-      <View style={styles.logoContainer}>
-        <BablooLogo size={72} color={colors.navy} />
+      {/* Logo — rendered directly, no container background */}
+      <View style={styles.logoWrapper}>
+        <BablooLogo size={80} color={colors.navy} />
       </View>
 
       {/* Bottom gradient fade */}
       <LinearGradient
-        colors={['transparent', colors.bg]}
+        colors={['transparent', 'rgba(237, 238, 246, 0.6)', colors.bg]}
+        locations={[0, 0.5, 1]}
         style={styles.gradient}
         pointerEvents="none"
       />
@@ -224,15 +225,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  logoContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoWrapper: {
     zIndex: 1,
-    ...shadows.md,
   },
   gradient: {
     position: 'absolute',
