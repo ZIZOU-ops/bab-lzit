@@ -14,14 +14,9 @@ import {
   CleaningIcon,
   CookingIcon,
   BabysittingIcon,
-  PlumbingIcon,
   ElectricalIcon,
   ITIcon,
-  StarOutlineIcon,
   HomeIcon,
-  ClockIcon,
-  LocationPinIcon,
-  LoyaltyIcon,
 } from './icons';
 import { colors } from '../constants/theme';
 
@@ -38,14 +33,9 @@ const ICON_MAP: Record<string, IconRenderFn> = {
   cleaning: (p) => <CleaningIcon {...p} />,
   cooking: (p) => <CookingIcon {...p} />,
   babysitting: (p) => <BabysittingIcon {...p} />,
-  plumbing: (p) => <PlumbingIcon {...p} />,
   electrical: (p) => <ElectricalIcon {...p} />,
   it: (p) => <ITIcon {...p} />,
-  star: (p) => <StarOutlineIcon {...p} />,
   home: (p) => <HomeIcon {...p} />,
-  clock: (p) => <ClockIcon {...p} />,
-  location: (p) => <LocationPinIcon {...p} />,
-  heart: (p) => <LoyaltyIcon {...p} />,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,12 +43,16 @@ const ICON_MAP: Record<string, IconRenderFn> = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Placement {
+  /** Unique key for React */
+  key: string;
   icon: string;
   /** Position as fraction of container width/height */
   x: number;
   y: number;
   size: number;
   opacity: number;
+  /** Icon stroke color */
+  color: string;
   /** Vertical float amplitude in px */
   amplitude: number;
   /** Full cycle duration in ms */
@@ -70,24 +64,25 @@ interface Placement {
 }
 
 const PLACEMENTS: Placement[] = [
-  // Top area
-  { icon: 'cleaning',    x: 0.14, y: 0.12, size: 34, opacity: 0.14, amplitude: 6,  period: 5200, phase: 0,     rockDeg: 4 },
-  { icon: 'star',        x: 0.44, y: 0.04, size: 20, opacity: 0.10, amplitude: 4,  period: 4600, phase: 2.8,   rockDeg: 6 },
-  { icon: 'cooking',     x: 0.76, y: 0.10, size: 32, opacity: 0.13, amplitude: 5,  period: 5800, phase: 1.1,   rockDeg: 3 },
+  // ── Top row ──
+  { key: 'clean1',  icon: 'cleaning',    x: 0.12, y: 0.10, size: 34, opacity: 0.16, color: colors.clayLight, amplitude: 6, period: 5200, phase: 0,   rockDeg: 4 },
+  { key: 'cook1',   icon: 'cooking',     x: 0.48, y: 0.06, size: 28, opacity: 0.12, color: colors.navy,      amplitude: 4, period: 5800, phase: 1.1, rockDeg: 3 },
+  { key: 'elec1',   icon: 'electrical',  x: 0.82, y: 0.08, size: 26, opacity: 0.13, color: colors.clayLight, amplitude: 5, period: 4800, phase: 2.4, rockDeg: 5 },
 
-  // Middle sides
-  { icon: 'plumbing',    x: 0.04, y: 0.46, size: 26, opacity: 0.10, amplitude: 5,  period: 6200, phase: 3.5,   rockDeg: 5 },
-  { icon: 'electrical',  x: 0.92, y: 0.40, size: 24, opacity: 0.11, amplitude: 4,  period: 5500, phase: 0.7,   rockDeg: 4 },
+  // ── Middle left ──
+  { key: 'baby1',   icon: 'babysitting', x: 0.05, y: 0.42, size: 30, opacity: 0.14, color: colors.navy,      amplitude: 5, period: 6200, phase: 3.5, rockDeg: 4 },
+  { key: 'it1',     icon: 'it',          x: 0.08, y: 0.72, size: 22, opacity: 0.10, color: colors.clayLight, amplitude: 4, period: 6800, phase: 5.0, rockDeg: 3 },
 
-  // Lower area
-  { icon: 'babysitting', x: 0.22, y: 0.72, size: 28, opacity: 0.12, amplitude: 6,  period: 5000, phase: 4.2,   rockDeg: 3 },
-  { icon: 'it',          x: 0.68, y: 0.74, size: 26, opacity: 0.10, amplitude: 5,  period: 5400, phase: 1.8,   rockDeg: 5 },
-  { icon: 'home',        x: 0.50, y: 0.82, size: 22, opacity: 0.09, amplitude: 4,  period: 6000, phase: 3.0,   rockDeg: 4 },
+  // ── Middle right ──
+  { key: 'home1',   icon: 'home',        x: 0.92, y: 0.38, size: 26, opacity: 0.12, color: colors.navy,      amplitude: 4, period: 5500, phase: 0.7, rockDeg: 4 },
+  { key: 'cook2',   icon: 'cooking',     x: 0.90, y: 0.65, size: 20, opacity: 0.09, color: colors.clayLight, amplitude: 3, period: 7000, phase: 4.0, rockDeg: 5 },
 
-  // Extra scattered small ones for density
-  { icon: 'heart',       x: 0.86, y: 0.68, size: 18, opacity: 0.08, amplitude: 3,  period: 6800, phase: 5.2,   rockDeg: 6 },
-  { icon: 'clock',       x: 0.08, y: 0.82, size: 18, opacity: 0.07, amplitude: 3,  period: 7000, phase: 2.2,   rockDeg: 5 },
-  { icon: 'location',    x: 0.62, y: 0.06, size: 18, opacity: 0.08, amplitude: 4,  period: 6400, phase: 4.6,   rockDeg: 4 },
+  // ── Bottom row ──
+  { key: 'baby2',   icon: 'babysitting', x: 0.24, y: 0.78, size: 24, opacity: 0.11, color: colors.clayLight, amplitude: 5, period: 5000, phase: 4.2, rockDeg: 3 },
+  { key: 'elec2',   icon: 'electrical',  x: 0.52, y: 0.84, size: 20, opacity: 0.09, color: colors.navy,      amplitude: 4, period: 6400, phase: 1.6, rockDeg: 4 },
+  { key: 'clean2',  icon: 'cleaning',    x: 0.72, y: 0.76, size: 26, opacity: 0.12, color: colors.navy,      amplitude: 5, period: 5400, phase: 2.8, rockDeg: 5 },
+  { key: 'it2',     icon: 'it',          x: 0.38, y: 0.14, size: 20, opacity: 0.10, color: colors.navy,      amplitude: 3, period: 6000, phase: 3.2, rockDeg: 3 },
+  { key: 'home2',   icon: 'home',        x: 0.65, y: 0.50, size: 18, opacity: 0.08, color: colors.clayLight, amplitude: 3, period: 7200, phase: 5.5, rockDeg: 4 },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -137,7 +132,7 @@ function FloatingIcon({ placement }: { placement: Placement }) {
         animStyle,
       ]}
     >
-      {IconFn({ size: placement.size, color: colors.navy })}
+      {IconFn({ size: placement.size, color: placement.color })}
     </Animated.View>
   );
 }
@@ -160,7 +155,7 @@ export function AnimatedAuthHeader({ scrollY }: AnimatedAuthHeaderProps) {
       {/* Floating service icons with parallax */}
       <Animated.View style={[StyleSheet.absoluteFill, parallaxStyle]}>
         {PLACEMENTS.map((p) => (
-          <FloatingIcon key={p.icon} placement={p} />
+          <FloatingIcon key={p.key} placement={p} />
         ))}
       </Animated.View>
 
@@ -169,15 +164,16 @@ export function AnimatedAuthHeader({ scrollY }: AnimatedAuthHeaderProps) {
         <BablooLogo size={96} color={colors.navy} />
       </View>
 
-      {/* Bottom gradient fade — smooth multi-stop to eliminate visible edge */}
+      {/* Bottom gradient fade — extra-smooth to eliminate any visible seam */}
       <LinearGradient
         colors={[
           'transparent',
-          `${colors.bg}40`,
-          `${colors.bg}AA`,
+          `${colors.bg}1A`,
+          `${colors.bg}66`,
+          `${colors.bg}CC`,
           colors.bg,
         ]}
-        locations={[0, 0.35, 0.7, 1]}
+        locations={[0, 0.2, 0.5, 0.8, 1]}
         style={styles.gradient}
         pointerEvents="none"
       />
@@ -196,6 +192,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    backgroundColor: colors.bg,
   },
   logo: {
     zIndex: 1,
@@ -205,7 +202,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: HEADER_H * 0.5,
+    height: HEADER_H * 0.55,
     zIndex: 2,
   },
 });
