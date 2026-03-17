@@ -8,7 +8,6 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { BablooLogo } from './BablooLogo';
 import {
   CleaningIcon,
@@ -164,19 +163,6 @@ export function AnimatedAuthHeader({ scrollY }: AnimatedAuthHeaderProps) {
         <BablooLogo size={110} />
       </View>
 
-      {/* Bottom gradient fade — extra-smooth to eliminate any visible seam */}
-      <LinearGradient
-        colors={[
-          'transparent',
-          `${colors.bg}1A`,
-          `${colors.bg}66`,
-          `${colors.bg}CC`,
-          colors.bg,
-        ]}
-        locations={[0, 0.2, 0.5, 0.8, 1]}
-        style={styles.gradient}
-        pointerEvents="none"
-      />
     </View>
   );
 }
@@ -196,13 +182,5 @@ const styles = StyleSheet.create({
   },
   logo: {
     zIndex: 1,
-  },
-  gradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: HEADER_H * 0.55,
-    zIndex: 2,
   },
 });
