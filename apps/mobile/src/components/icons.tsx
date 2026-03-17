@@ -275,3 +275,62 @@ export function ChatIcon({ size = 24, color = colors.navy }: IconProps) {
     </Svg>
   );
 }
+
+/* ─── Additional service icons for auth header ─────────────────────────── */
+
+export function ShirtIcon({ size = 24, color = colors.navy }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M9.5 3L5 6l2.5 2.5L9 7.5V20h6V7.5l1.5 1L19 6l-4.5-3-1.5 2h-2L9.5 3z" stroke={color} {...strokeCommon} />
+    </Svg>
+  );
+}
+
+export function LeafIcon({ size = 24, color = colors.navy }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M6 21C6 13 11 5 20 5c-1 8-5 14-11 17" stroke={color} {...strokeCommon} />
+      <Path d="M11 17l5-7" stroke={color} {...strokeCommon} />
+    </Svg>
+  );
+}
+
+export function PawIcon({ size = 24, color = colors.navy }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="9" cy="6.5" r="1.8" stroke={color} {...strokeCommon} />
+      <Circle cx="15" cy="6.5" r="1.8" stroke={color} {...strokeCommon} />
+      <Circle cx="6" cy="11" r="1.5" stroke={color} {...strokeCommon} />
+      <Circle cx="18" cy="11" r="1.5" stroke={color} {...strokeCommon} />
+      <Path d="M8.5 16c0-2 1.5-3.5 3.5-3.5s3.5 1.5 3.5 3.5-1.8 4-3.5 4-3.5-1.5-3.5-4z" stroke={color} {...strokeCommon} />
+    </Svg>
+  );
+}
+
+export function BoxIcon({ size = 24, color = colors.navy }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M4 8l8-4 8 4v10l-8 4-8-4V8z" stroke={color} {...strokeCommon} />
+      <Path d="M12 4v18" stroke={color} {...strokeCommon} />
+      <Path d="M4 8l8 4 8-4" stroke={color} {...strokeCommon} />
+    </Svg>
+  );
+}
+
+export function PaintRollerIcon({ size = 24, color = colors.navy }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="4" y="3" width="12" height="5" rx="1.5" stroke={color} {...strokeCommon} />
+      <Path d="M10 8v4" stroke={color} {...strokeCommon} />
+      <Path d="M10 12h6v8" stroke={color} {...strokeCommon} />
+    </Svg>
+  );
+}
+
+export function SparkleSmallIcon({ size = 24, color = colors.navy }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z" stroke={color} {...strokeCommon} />
+    </Svg>
+  );
+}
