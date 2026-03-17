@@ -65,24 +65,24 @@ interface Placement {
 
 const PLACEMENTS: Placement[] = [
   // ── Top row ──
-  { key: 'clean1',  icon: 'cleaning',    x: 0.12, y: 0.10, size: 34, opacity: 0.16, color: colors.clayLight, amplitude: 6, period: 5200, phase: 0,   rockDeg: 4 },
-  { key: 'cook1',   icon: 'cooking',     x: 0.48, y: 0.06, size: 28, opacity: 0.12, color: colors.navy,      amplitude: 4, period: 5800, phase: 1.1, rockDeg: 3 },
-  { key: 'elec1',   icon: 'electrical',  x: 0.82, y: 0.08, size: 26, opacity: 0.13, color: colors.clayLight, amplitude: 5, period: 4800, phase: 2.4, rockDeg: 5 },
+  { key: 'clean1',  icon: 'cleaning',    x: 0.12, y: 0.10, size: 34, opacity: 1, color: colors.clayLight, amplitude: 6, period: 5200, phase: 0,   rockDeg: 4 },
+  { key: 'cook1',   icon: 'cooking',     x: 0.48, y: 0.06, size: 28, opacity: 1, color: colors.navy,      amplitude: 4, period: 5800, phase: 1.1, rockDeg: 3 },
+  { key: 'elec1',   icon: 'electrical',  x: 0.82, y: 0.08, size: 26, opacity: 1, color: colors.clayLight, amplitude: 5, period: 4800, phase: 2.4, rockDeg: 5 },
 
   // ── Middle left ──
-  { key: 'baby1',   icon: 'babysitting', x: 0.05, y: 0.42, size: 30, opacity: 0.14, color: colors.navy,      amplitude: 5, period: 6200, phase: 3.5, rockDeg: 4 },
-  { key: 'it1',     icon: 'it',          x: 0.08, y: 0.72, size: 22, opacity: 0.10, color: colors.clayLight, amplitude: 4, period: 6800, phase: 5.0, rockDeg: 3 },
+  { key: 'baby1',   icon: 'babysitting', x: 0.05, y: 0.42, size: 30, opacity: 1, color: colors.navy,      amplitude: 5, period: 6200, phase: 3.5, rockDeg: 4 },
+  { key: 'it1',     icon: 'it',          x: 0.08, y: 0.72, size: 22, opacity: 1, color: colors.clayLight, amplitude: 4, period: 6800, phase: 5.0, rockDeg: 3 },
 
   // ── Middle right ──
-  { key: 'home1',   icon: 'home',        x: 0.92, y: 0.38, size: 26, opacity: 0.12, color: colors.navy,      amplitude: 4, period: 5500, phase: 0.7, rockDeg: 4 },
-  { key: 'cook2',   icon: 'cooking',     x: 0.90, y: 0.65, size: 20, opacity: 0.09, color: colors.clayLight, amplitude: 3, period: 7000, phase: 4.0, rockDeg: 5 },
+  { key: 'home1',   icon: 'home',        x: 0.92, y: 0.38, size: 26, opacity: 1, color: colors.navy,      amplitude: 4, period: 5500, phase: 0.7, rockDeg: 4 },
+  { key: 'cook2',   icon: 'cooking',     x: 0.90, y: 0.65, size: 20, opacity: 1, color: colors.clayLight, amplitude: 3, period: 7000, phase: 4.0, rockDeg: 5 },
 
   // ── Bottom row ──
-  { key: 'baby2',   icon: 'babysitting', x: 0.24, y: 0.78, size: 24, opacity: 0.11, color: colors.clayLight, amplitude: 5, period: 5000, phase: 4.2, rockDeg: 3 },
-  { key: 'elec2',   icon: 'electrical',  x: 0.52, y: 0.84, size: 20, opacity: 0.09, color: colors.navy,      amplitude: 4, period: 6400, phase: 1.6, rockDeg: 4 },
-  { key: 'clean2',  icon: 'cleaning',    x: 0.72, y: 0.76, size: 26, opacity: 0.12, color: colors.navy,      amplitude: 5, period: 5400, phase: 2.8, rockDeg: 5 },
-  { key: 'it2',     icon: 'it',          x: 0.38, y: 0.14, size: 20, opacity: 0.10, color: colors.navy,      amplitude: 3, period: 6000, phase: 3.2, rockDeg: 3 },
-  { key: 'home2',   icon: 'home',        x: 0.65, y: 0.50, size: 18, opacity: 0.08, color: colors.clayLight, amplitude: 3, period: 7200, phase: 5.5, rockDeg: 4 },
+  { key: 'baby2',   icon: 'babysitting', x: 0.24, y: 0.78, size: 24, opacity: 1, color: colors.clayLight, amplitude: 5, period: 5000, phase: 4.2, rockDeg: 3 },
+  { key: 'elec2',   icon: 'electrical',  x: 0.52, y: 0.84, size: 20, opacity: 1, color: colors.navy,      amplitude: 4, period: 6400, phase: 1.6, rockDeg: 4 },
+  { key: 'clean2',  icon: 'cleaning',    x: 0.72, y: 0.76, size: 26, opacity: 1, color: colors.navy,      amplitude: 5, period: 5400, phase: 2.8, rockDeg: 5 },
+  { key: 'it2',     icon: 'it',          x: 0.38, y: 0.14, size: 20, opacity: 1, color: colors.navy,      amplitude: 3, period: 6000, phase: 3.2, rockDeg: 3 },
+  { key: 'home2',   icon: 'home',        x: 0.65, y: 0.50, size: 18, opacity: 1, color: colors.clayLight, amplitude: 3, period: 7200, phase: 5.5, rockDeg: 4 },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ export function AnimatedAuthHeader({ scrollY }: AnimatedAuthHeaderProps) {
 
       {/* Centered logo */}
       <View style={styles.logo}>
-        <BablooLogo size={96} color={colors.navy} />
+        <BablooLogo size={110} />
       </View>
 
       {/* Bottom gradient fade — extra-smooth to eliminate any visible seam */}
