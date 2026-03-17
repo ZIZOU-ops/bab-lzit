@@ -1,10 +1,8 @@
 import React from 'react';
 import { Dimensions, StyleSheet, View } from 'react-native';
-import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import Animated, {
   Easing,
   SharedValue,
-  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -12,113 +10,98 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BablooLogo } from './BablooLogo';
+import {
+  CleaningIcon,
+  CookingIcon,
+  BabysittingIcon,
+  PlumbingIcon,
+  ElectricalIcon,
+  ITIcon,
+  StarOutlineIcon,
+  HomeIcon,
+  ClockIcon,
+  LocationPinIcon,
+  LoyaltyIcon,
+} from './icons';
 import { colors } from '../constants/theme';
 
-const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
+const { width: SW, height: SH } = Dimensions.get('window');
+const HEADER_H = SH * 0.28;
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-const CONTAINER_HEIGHT = SCREEN_HEIGHT * 0.4;
+// ─────────────────────────────────────────────────────────────────────────────
+// Icon registry — maps keys to components from the shared icon library
+// ─────────────────────────────────────────────────────────────────────────────
 
-const CENTER_X = SCREEN_WIDTH / 2;
-const CENTER_Y = CONTAINER_HEIGHT / 2;
+type IconRenderFn = (props: { size: number; color: string }) => React.ReactElement;
 
-// ---------------------------------------------------------------------------
-// Blob configuration
-// ---------------------------------------------------------------------------
+const ICON_MAP: Record<string, IconRenderFn> = {
+  cleaning: (p) => <CleaningIcon {...p} />,
+  cooking: (p) => <CookingIcon {...p} />,
+  babysitting: (p) => <BabysittingIcon {...p} />,
+  plumbing: (p) => <PlumbingIcon {...p} />,
+  electrical: (p) => <ElectricalIcon {...p} />,
+  it: (p) => <ITIcon {...p} />,
+  star: (p) => <StarOutlineIcon {...p} />,
+  home: (p) => <HomeIcon {...p} />,
+  clock: (p) => <ClockIcon {...p} />,
+  location: (p) => <LocationPinIcon {...p} />,
+  heart: (p) => <LoyaltyIcon {...p} />,
+};
 
-interface BlobConfig {
-  id: string;
-  rx: number;
-  ry: number;
-  color: string;
+// ─────────────────────────────────────────────────────────────────────────────
+// Floating icon placements — scattered around the logo
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Placement {
+  icon: string;
+  /** Position as fraction of container width/height */
+  x: number;
+  y: number;
+  size: number;
   opacity: number;
-  orbitRx: number;
-  orbitRy: number;
+  /** Vertical float amplitude in px */
+  amplitude: number;
+  /** Full cycle duration in ms */
   period: number;
+  /** Phase offset in radians */
   phase: number;
-  reverse?: boolean;
+  /** Subtle rotation amplitude in degrees */
+  rockDeg: number;
 }
 
-const BACK_BLOBS: BlobConfig[] = [
-  {
-    id: 'a1',
-    rx: 90,
-    ry: 90,
-    color: colors.navy,
-    opacity: 0.18,
-    orbitRx: 110,
-    orbitRy: 100,
-    period: 14000,
-    phase: 0,
-  },
-  {
-    id: 'a2',
-    rx: 78,
-    ry: 72,
-    color: colors.textSec,
-    opacity: 0.15,
-    orbitRx: 90,
-    orbitRy: 120,
-    period: 18000,
-    phase: Math.PI * 0.7,
-  },
-  {
-    id: 'a3',
-    rx: 65,
-    ry: 65,
-    color: colors.clay,
-    opacity: 0.12,
-    orbitRx: 100,
-    orbitRy: 80,
-    period: 16000,
-    phase: Math.PI * 1.3,
-  },
+const PLACEMENTS: Placement[] = [
+  // Top area
+  { icon: 'cleaning',    x: 0.14, y: 0.12, size: 34, opacity: 0.14, amplitude: 6,  period: 5200, phase: 0,     rockDeg: 4 },
+  { icon: 'star',        x: 0.44, y: 0.04, size: 20, opacity: 0.10, amplitude: 4,  period: 4600, phase: 2.8,   rockDeg: 6 },
+  { icon: 'cooking',     x: 0.76, y: 0.10, size: 32, opacity: 0.13, amplitude: 5,  period: 5800, phase: 1.1,   rockDeg: 3 },
+
+  // Middle sides
+  { icon: 'plumbing',    x: 0.04, y: 0.46, size: 26, opacity: 0.10, amplitude: 5,  period: 6200, phase: 3.5,   rockDeg: 5 },
+  { icon: 'electrical',  x: 0.92, y: 0.40, size: 24, opacity: 0.11, amplitude: 4,  period: 5500, phase: 0.7,   rockDeg: 4 },
+
+  // Lower area
+  { icon: 'babysitting', x: 0.22, y: 0.72, size: 28, opacity: 0.12, amplitude: 6,  period: 5000, phase: 4.2,   rockDeg: 3 },
+  { icon: 'it',          x: 0.68, y: 0.74, size: 26, opacity: 0.10, amplitude: 5,  period: 5400, phase: 1.8,   rockDeg: 5 },
+  { icon: 'home',        x: 0.50, y: 0.82, size: 22, opacity: 0.09, amplitude: 4,  period: 6000, phase: 3.0,   rockDeg: 4 },
+
+  // Extra scattered small ones for density
+  { icon: 'heart',       x: 0.86, y: 0.68, size: 18, opacity: 0.08, amplitude: 3,  period: 6800, phase: 5.2,   rockDeg: 6 },
+  { icon: 'clock',       x: 0.08, y: 0.82, size: 18, opacity: 0.07, amplitude: 3,  period: 7000, phase: 2.2,   rockDeg: 5 },
+  { icon: 'location',    x: 0.62, y: 0.06, size: 18, opacity: 0.08, amplitude: 4,  period: 6400, phase: 4.6,   rockDeg: 4 },
 ];
 
-const FRONT_BLOBS: BlobConfig[] = [
-  {
-    id: 'b1',
-    rx: 40,
-    ry: 40,
-    color: colors.navy,
-    opacity: 0.25,
-    orbitRx: 70,
-    orbitRy: 65,
-    period: 8000,
-    phase: Math.PI * 0.5,
-    reverse: true,
-  },
-  {
-    id: 'b2',
-    rx: 33,
-    ry: 29,
-    color: colors.clay,
-    opacity: 0.20,
-    orbitRx: 80,
-    orbitRy: 50,
-    period: 10000,
-    phase: Math.PI * 1.1,
-  },
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// Floating icon — smooth sinusoidal translateY + subtle scale + gentle rock
+// Inspired by the "breathing" feel of Claude's thinking animation
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ---------------------------------------------------------------------------
-// Animated blob component
-// ---------------------------------------------------------------------------
-
-interface AnimatedBlobProps {
-  config: BlobConfig;
-  centerX: number;
-  centerY: number;
-}
-
-function AnimatedBlob({ config, centerX, centerY }: AnimatedBlobProps) {
+function FloatingIcon({ placement }: { placement: Placement }) {
   const progress = useSharedValue(0);
 
   React.useEffect(() => {
     progress.value = withRepeat(
       withTiming(2 * Math.PI, {
-        duration: config.period,
+        duration: placement.period,
         easing: Easing.linear,
       }),
       -1,
@@ -127,38 +110,41 @@ function AnimatedBlob({ config, centerX, centerY }: AnimatedBlobProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const animatedProps = useAnimatedProps(() => {
-    const direction = config.reverse ? -1 : 1;
-    const angle = direction * progress.value + config.phase;
+  const animStyle = useAnimatedStyle(() => {
+    'worklet';
+    const t = progress.value + placement.phase;
     return {
-      cx: centerX + config.orbitRx * Math.cos(angle),
-      cy: centerY + config.orbitRy * Math.sin(angle),
+      transform: [
+        { translateY: placement.amplitude * Math.sin(t) },
+        { scale: 1 + 0.04 * Math.sin(t * 0.6) },
+        { rotate: `${placement.rockDeg * Math.sin(t * 0.4)}deg` },
+      ],
     };
   });
 
-  const gradientId = `grad-${config.id}`;
+  const IconFn = ICON_MAP[placement.icon];
+  if (!IconFn) return null;
 
   return (
-    <>
-      <Defs>
-        <RadialGradient id={gradientId} cx="50%" cy="50%" r="50%">
-          <Stop offset="0" stopColor={config.color} stopOpacity={config.opacity} />
-          <Stop offset="1" stopColor={config.color} stopOpacity={0} />
-        </RadialGradient>
-      </Defs>
-      <AnimatedEllipse
-        animatedProps={animatedProps}
-        rx={config.rx}
-        ry={config.ry}
-        fill={`url(#${gradientId})`}
-      />
-    </>
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          left: placement.x * SW - placement.size / 2,
+          top: placement.y * HEADER_H - placement.size / 2,
+          opacity: placement.opacity,
+        },
+        animStyle,
+      ]}
+    >
+      {IconFn({ size: placement.size, color: colors.navy })}
+    </Animated.View>
   );
 }
 
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 // Main component
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface AnimatedAuthHeaderProps {
   scrollY?: SharedValue<number>;
@@ -166,46 +152,32 @@ interface AnimatedAuthHeaderProps {
 
 export function AnimatedAuthHeader({ scrollY }: AnimatedAuthHeaderProps) {
   const parallaxStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: (scrollY?.value ?? 0) * 0.3 }],
+    transform: [{ translateY: (scrollY?.value ?? 0) * 0.35 }],
   }));
 
   return (
-    <View style={styles.container}>
-      {/* Parallax wrapper for blobs — single SVG, back blobs first then front */}
+    <View style={styles.wrapper}>
+      {/* Floating service icons with parallax */}
       <Animated.View style={[StyleSheet.absoluteFill, parallaxStyle]}>
-        <Svg
-          style={StyleSheet.absoluteFill}
-          width={SCREEN_WIDTH}
-          height={CONTAINER_HEIGHT}
-        >
-          {BACK_BLOBS.map((blob) => (
-            <AnimatedBlob
-              key={blob.id}
-              config={blob}
-              centerX={CENTER_X}
-              centerY={CENTER_Y}
-            />
-          ))}
-          {FRONT_BLOBS.map((blob) => (
-            <AnimatedBlob
-              key={blob.id}
-              config={blob}
-              centerX={CENTER_X}
-              centerY={CENTER_Y}
-            />
-          ))}
-        </Svg>
+        {PLACEMENTS.map((p) => (
+          <FloatingIcon key={p.icon} placement={p} />
+        ))}
       </Animated.View>
 
-      {/* Logo — rendered directly, no container background */}
-      <View style={styles.logoWrapper}>
-        <BablooLogo size={80} color={colors.navy} />
+      {/* Centered logo */}
+      <View style={styles.logo}>
+        <BablooLogo size={96} color={colors.navy} />
       </View>
 
-      {/* Bottom gradient fade */}
+      {/* Bottom gradient fade — smooth multi-stop to eliminate visible edge */}
       <LinearGradient
-        colors={['transparent', 'rgba(237, 238, 246, 0.6)', colors.bg]}
-        locations={[0, 0.5, 1]}
+        colors={[
+          'transparent',
+          `${colors.bg}40`,
+          `${colors.bg}AA`,
+          colors.bg,
+        ]}
+        locations={[0, 0.35, 0.7, 1]}
         style={styles.gradient}
         pointerEvents="none"
       />
@@ -213,19 +185,19 @@ export function AnimatedAuthHeader({ scrollY }: AnimatedAuthHeaderProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 // Styles
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
-    height: CONTAINER_HEIGHT,
-    width: SCREEN_WIDTH,
+  wrapper: {
+    height: HEADER_H,
+    width: SW,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  logoWrapper: {
+  logo: {
     zIndex: 1,
   },
   gradient: {
@@ -233,7 +205,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: CONTAINER_HEIGHT * 0.3,
+    height: HEADER_H * 0.5,
     zIndex: 2,
   },
 });
