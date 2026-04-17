@@ -6,125 +6,132 @@ import { computePrice } from '../pricing';
 import { ServiceType } from '../types/enums';
 
 describe('Ménage pricing', () => {
-  // Surface bracket boundaries
-  it('40m² solo simple = 80 MAD', () => {
-    expect(
-      computeMenagePrice({ surface: 40, teamType: 'solo', cleanType: 'simple' })
-        .floorPrice,
-    ).toBe(80);
+  it('40m² solo simple uses labor floor = 120 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 40,
+      teamType: 'solo',
+      cleanType: 'simple',
+    });
+    expect(result.floorPrice).toBe(120);
+    expect(result.ceiling).toBe(300);
   });
 
-  it('41m² solo simple = 100 MAD (next bracket)', () => {
-    expect(
-      computeMenagePrice({ surface: 41, teamType: 'solo', cleanType: 'simple' })
-        .floorPrice,
-    ).toBe(100);
+  it('100m² solo simple = 135 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 100,
+      teamType: 'solo',
+      cleanType: 'simple',
+    });
+    expect(result.floorPrice).toBe(135);
+    expect(result.ceiling).toBe(338);
   });
 
-  it('70m² solo simple = 100 MAD', () => {
-    expect(
-      computeMenagePrice({ surface: 70, teamType: 'solo', cleanType: 'simple' })
-        .floorPrice,
-    ).toBe(100);
+  it('200m² duo simple = 250 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 200,
+      teamType: 'duo',
+      cleanType: 'simple',
+    });
+    expect(result.floorPrice).toBe(250);
+    expect(result.ceiling).toBe(625);
   });
 
-  it('70m² duo simple = 140 MAD', () => {
-    expect(
-      computeMenagePrice({ surface: 70, teamType: 'duo', cleanType: 'simple' })
-        .floorPrice,
-    ).toBe(140);
+  it('300m² squad(3) simple = 417 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 300,
+      teamType: 'squad',
+      cleanType: 'simple',
+      squadSize: 3,
+    });
+    expect(result.floorPrice).toBe(417);
+    expect(result.ceiling).toBe(1043);
   });
 
-  it('110m² solo simple = 130 MAD', () => {
-    expect(
-      computeMenagePrice({
-        surface: 110,
-        teamType: 'solo',
-        cleanType: 'simple',
-      }).floorPrice,
-    ).toBe(130);
+  it('400m² solo simple = 252 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 400,
+      teamType: 'solo',
+      cleanType: 'simple',
+    });
+    expect(result.floorPrice).toBe(252);
+    expect(result.ceiling).toBe(630);
   });
 
-  it('160m² squad(3) simple = 300 MAD (squad minimum pay)', () => {
-    // surface-based squad price = 270, but squad min = 3 * 100 = 300
-    expect(
-      computeMenagePrice({
-        surface: 160,
-        teamType: 'squad',
-        cleanType: 'simple',
-        squadSize: 3,
-      }).floorPrice,
-    ).toBe(300);
+  it('100m² solo deep = 243 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 100,
+      teamType: 'solo',
+      cleanType: 'deep',
+    });
+    expect(result.floorPrice).toBe(243);
+    expect(result.ceiling).toBe(608);
   });
 
-  it('220m² squad(4) simple = max(320, 400) = 400 MAD', () => {
-    expect(
-      computeMenagePrice({
-        surface: 220,
-        teamType: 'squad',
-        cleanType: 'simple',
-        squadSize: 4,
-      }).floorPrice,
-    ).toBe(400);
+  it('200m² duo deep = 350 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 200,
+      teamType: 'duo',
+      cleanType: 'deep',
+    });
+    expect(result.floorPrice).toBe(350);
+    expect(result.ceiling).toBe(875);
   });
 
-  it('300m² squad(3) simple = 400 MAD (surface > squad min)', () => {
-    // surface-based = 400, squad min = 300 → 400
-    expect(
-      computeMenagePrice({
-        surface: 300,
-        teamType: 'squad',
-        cleanType: 'simple',
-        squadSize: 3,
-      }).floorPrice,
-    ).toBe(400);
+  it('300m² squad(3) deep = 530 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 300,
+      teamType: 'squad',
+      cleanType: 'deep',
+      squadSize: 3,
+    });
+    expect(result.floorPrice).toBe(530);
+    expect(result.ceiling).toBe(1325);
   });
 
-  // Deep clean multiplier
-  it('80m² solo deep = round(130 * 1.35) = 176 MAD', () => {
-    expect(
-      computeMenagePrice({ surface: 80, teamType: 'solo', cleanType: 'deep' })
-        .floorPrice,
-    ).toBe(176);
+  it('400m² villa solo simple = 328 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 400,
+      teamType: 'solo',
+      cleanType: 'simple',
+      propertyType: 'villa',
+    });
+    expect(result.floorPrice).toBe(328);
+    expect(result.ceiling).toBe(820);
   });
 
-  it('40m² solo deep = round(80 * 1.35) = 108 MAD', () => {
-    expect(
-      computeMenagePrice({ surface: 40, teamType: 'solo', cleanType: 'deep' })
-        .floorPrice,
-    ).toBe(108);
+  it('400m² villa squad(3) simple = 616 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 400,
+      teamType: 'squad',
+      cleanType: 'simple',
+      squadSize: 3,
+      propertyType: 'villa',
+    });
+    expect(result.floorPrice).toBe(616);
+    expect(result.ceiling).toBe(1540);
   });
 
-  // Over 300m² surcharge
-  it('350m² solo simple = 260 + ceil(50/50)*35 = 295 MAD', () => {
-    expect(
-      computeMenagePrice({
-        surface: 350,
-        teamType: 'solo',
-        cleanType: 'simple',
-      }).floorPrice,
-    ).toBe(295);
+  it('120m² villa solo simple with 2 floors = 220 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 120,
+      teamType: 'solo',
+      cleanType: 'simple',
+      propertyType: 'villa',
+      floors: 2,
+    });
+    expect(result.floorPrice).toBe(220);
+    expect(result.ceiling).toBe(550);
   });
 
-  it('400m² duo simple = 320 + ceil(100/50)*45 = 410 MAD', () => {
-    expect(
-      computeMenagePrice({
-        surface: 400,
-        teamType: 'duo',
-        cleanType: 'simple',
-      }).floorPrice,
-    ).toBe(410);
-  });
-
-  it('500m² squad(5) simple = max(400 + ceil(200/50)*55, 5*100) = max(620,500) = 620', () => {
-    expect(
-      computeMenagePrice({
-        surface: 500,
-        teamType: 'squad',
-        cleanType: 'simple',
-        squadSize: 5,
-      }).floorPrice,
-    ).toBe(620);
+  it('500m² squad(5) simple includes extra member surcharge = 684 MAD', () => {
+    const result = computeMenagePrice({
+      surface: 500,
+      teamType: 'squad',
+      cleanType: 'simple',
+      squadSize: 5,
+    });
+    expect(result.floorPrice).toBe(684);
+    expect(result.ceiling).toBe(1710);
   });
 
   // Ceiling
@@ -152,44 +159,76 @@ describe('Ménage pricing', () => {
 });
 
 describe('Cuisine pricing', () => {
-  it('1 guest = 100 MAD', () => {
-    expect(computeCuisinePrice({ guests: 1 }).floorPrice).toBe(100);
+  it('1 guest = 200 MAD', () => {
+    expect(computeCuisinePrice({ guests: 1 }).floorPrice).toBe(200);
   });
 
-  it('4 guests = 100 MAD', () => {
-    expect(computeCuisinePrice({ guests: 4 }).floorPrice).toBe(100);
+  it('4 guests = 200 MAD floor and 500 MAD ceiling', () => {
+    const result = computeCuisinePrice({ guests: 4 });
+    expect(result.floorPrice).toBe(200);
+    expect(result.ceiling).toBe(500);
+    expect(result.durationMinutes).toEqual({ min: 90, max: 120 });
   });
 
-  it('5 guests = 130 MAD', () => {
-    expect(computeCuisinePrice({ guests: 5 }).floorPrice).toBe(130);
+  it('5 guests = 280 MAD', () => {
+    expect(computeCuisinePrice({ guests: 5 }).floorPrice).toBe(280);
   });
 
-  it('7 guests = 130 MAD', () => {
-    expect(computeCuisinePrice({ guests: 7 }).floorPrice).toBe(130);
+  it('6 guests = 280 MAD floor and 700 MAD ceiling', () => {
+    const result = computeCuisinePrice({ guests: 6 });
+    expect(result.floorPrice).toBe(280);
+    expect(result.ceiling).toBe(700);
+    expect(result.durationMinutes).toEqual({ min: 120, max: 180 });
   });
 
-  it('8 guests = 165 MAD', () => {
-    expect(computeCuisinePrice({ guests: 8 }).floorPrice).toBe(165);
+  it('7 guests = 280 MAD', () => {
+    expect(computeCuisinePrice({ guests: 7 }).floorPrice).toBe(280);
   });
 
-  it('10 guests = 165 MAD', () => {
-    expect(computeCuisinePrice({ guests: 10 }).floorPrice).toBe(165);
+  it('8 guests = 380 MAD floor and 950 MAD ceiling', () => {
+    const result = computeCuisinePrice({ guests: 8 });
+    expect(result.floorPrice).toBe(380);
+    expect(result.ceiling).toBe(950);
   });
 
-  it('11 guests = 165 + ceil(1/3)*25 = 190 MAD', () => {
-    expect(computeCuisinePrice({ guests: 11 }).floorPrice).toBe(190);
+  it('10 guests = 380 MAD', () => {
+    const result = computeCuisinePrice({ guests: 10 });
+    expect(result.floorPrice).toBe(380);
+    expect(result.durationMinutes).toEqual({ min: 180, max: 240 });
   });
 
-  it('13 guests = 165 + ceil(3/3)*25 = 190 MAD', () => {
-    expect(computeCuisinePrice({ guests: 13 }).floorPrice).toBe(190);
+  it('11 guests = 380 + ceil(1/3)*50 = 430 MAD', () => {
+    expect(computeCuisinePrice({ guests: 11 }).floorPrice).toBe(430);
   });
 
-  it('14 guests = 165 + ceil(4/3)*25 = 215 MAD', () => {
-    expect(computeCuisinePrice({ guests: 14 }).floorPrice).toBe(215);
+  it('12 guests = 430 MAD floor and 1075 MAD ceiling', () => {
+    const result = computeCuisinePrice({ guests: 12 });
+    expect(result.floorPrice).toBe(430);
+    expect(result.ceiling).toBe(1075);
   });
 
-  it('20 guests = 165 + ceil(10/3)*25 = 265 MAD', () => {
-    expect(computeCuisinePrice({ guests: 20 }).floorPrice).toBe(265);
+  it('13 guests = 380 + ceil(3/3)*50 = 430 MAD', () => {
+    expect(computeCuisinePrice({ guests: 13 }).floorPrice).toBe(430);
+  });
+
+  it('14 guests = 380 + ceil(4/3)*50 = 480 MAD', () => {
+    const result = computeCuisinePrice({ guests: 14 });
+    expect(result.floorPrice).toBe(480);
+    expect(result.durationMinutes).toEqual({ min: 240, max: 300 });
+  });
+
+  it('20 guests = 580 MAD floor and 1450 MAD ceiling', () => {
+    const result = computeCuisinePrice({ guests: 20 });
+    expect(result.floorPrice).toBe(580);
+    expect(result.ceiling).toBe(1450);
+    expect(result.durationMinutes).toEqual({ min: 300, max: 420 });
+  });
+
+  it('6 guests reception = 420 MAD floor and 1050 MAD ceiling', () => {
+    const result = computeCuisinePrice({ guests: 6, mealType: 'reception' });
+    expect(result.floorPrice).toBe(420);
+    expect(result.ceiling).toBe(1050);
+    expect(result.durationMinutes).toEqual({ min: 120, max: 180 });
   });
 });
 
@@ -232,12 +271,12 @@ describe('computePrice dispatcher', () => {
       teamType: 'solo',
       cleanType: 'simple',
     });
-    expect(result.floorPrice).toBe(80);
+    expect(result.floorPrice).toBe(120);
   });
 
   it('dispatches cuisine', () => {
     const result = computePrice(ServiceType.CUISINE, { guests: 4 });
-    expect(result.floorPrice).toBe(100);
+    expect(result.floorPrice).toBe(200);
   });
 
   it('dispatches childcare', () => {

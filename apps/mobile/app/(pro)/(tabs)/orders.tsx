@@ -1,11 +1,11 @@
 import React from 'react';
-import { FlatList, RefreshControl, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Platform, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { Card, LoadingScreen } from '../../../src/components/ui';
+import { Card, LoadingScreen, ScreenHeader } from '../../../src/components/ui';
 import { OrderCard } from '../../../src/components/order';
-import { colors, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
+import { colors, fonts, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
 import { useProOrders } from '../../../src/hooks/pro/useProQueries';
 import { useProSocket } from '../../../src/hooks/pro/useProSocket';
 
@@ -20,10 +20,8 @@ export default function ProOrdersScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('pro.ordersTitle')}</Text>
-      </View>
+    <View style={styles.container}>
+      <ScreenHeader title={t('pro.ordersTitle')} showBack={false} />
 
       <FlatList
         data={ordersQuery.orders}
@@ -65,22 +63,27 @@ export default function ProOrdersScreen() {
           </Card>
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: {
+    backgroundColor: colors.navy,
+    paddingTop: Platform.OS === 'ios' ? 64 : 40,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.lg + spacing.xs,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
   },
-  title: {
-    ...textStyles.h1,
-    color: colors.navy,
+  headerTitle: {
+    fontFamily: fonts.nunito.bold,
+    fontSize: 22,
+    color: colors.white,
   },
   listContent: {
+    paddingTop: spacing.lg,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing['2xl'],
     flexGrow: 1,

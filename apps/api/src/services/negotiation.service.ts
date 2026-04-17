@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { ERROR_CODES } from '@babloo/shared/errors';
+import {
+  NEGOTIATION_CEILING_MULTIPLIER,
+  NEGOTIATION_INCREMENT,
+  PRO_FLOOR_DISCOUNT,
+  isValidOfferAmount,
+  isValidProOfferAmount,
+} from '@babloo/shared/pricing';
 import type { PrismaClient } from '@prisma/client';
 import type { Logger } from 'pino';
 import {
@@ -15,9 +22,6 @@ type Deps = {
   db: PrismaClient;
   logger: Logger;
 };
-
-const CEILING_MULTIPLIER = 2.5;
-const OFFER_STEP = 5;
 
 async function nextSeq(db: DbClient, orderId: string): Promise<number> {
   const latestMessage = await db.message.findFirst({
@@ -136,7 +140,7 @@ export async function createOffer(
     amount: number;
   },
 ) {
-  const { order } = await checkParticipant(deps, input.userId, input.orderId);
+  const { order, participantRole } = await checkParticipant(deps, input.userId, input.orderId);
 
   if (order.status !== 'negotiating') {
     throw new ConflictError(
@@ -145,18 +149,27 @@ export async function createOffer(
     );
   }
 
-  const ceiling = Math.round(order.floorPrice * CEILING_MULTIPLIER);
-  if (input.amount < order.floorPrice || input.amount > ceiling) {
-    throw new ValidationError(
-      ERROR_CODES.NEG_AMOUNT_OUT_OF_BOUNDS,
-      `Offer amount must be between ${order.floorPrice} and ${ceiling}`,
-    );
-  }
+  const ceiling = Math.round(order.floorPrice * NEGOTIATION_CEILING_MULTIPLIER);
+  const minimumAmount =
+    participantRole === 'pro'
+      ? Math.round(order.floorPrice * (1 - PRO_FLOOR_DISCOUNT))
+      : order.floorPrice;
+  const isValidAmount =
+    participantRole === 'pro'
+      ? isValidProOfferAmount(input.amount, order.floorPrice, ceiling)
+      : isValidOfferAmount(input.amount, order.floorPrice, ceiling);
 
-  if (input.amount % OFFER_STEP !== 0) {
+  if (!isValidAmount) {
+    if (input.amount < minimumAmount || input.amount > ceiling) {
+      throw new ValidationError(
+        ERROR_CODES.NEG_AMOUNT_OUT_OF_BOUNDS,
+        `Offer amount must be between ${minimumAmount} and ${ceiling}`,
+      );
+    }
+
     throw new ValidationError(
       ERROR_CODES.NEG_AMOUNT_BAD_INCREMENT,
-      `Offer amount must be a multiple of ${OFFER_STEP}`,
+      `Offer amount must be a multiple of ${NEGOTIATION_INCREMENT}`,
     );
   }
 

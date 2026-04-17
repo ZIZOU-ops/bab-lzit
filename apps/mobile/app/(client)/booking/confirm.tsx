@@ -1,19 +1,35 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { NEIGHBORHOODS } from '@babloo/shared/pricing';
 import { useTranslation } from 'react-i18next';
-import { BackHeader, Button, Card, Input } from '../../../src/components/ui';
-import { colors, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
+import { Button, Card, Input, ScreenHeader } from '../../../src/components/ui';
+import { colors, fonts, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
 import { useCreateOrder } from '../../../src/hooks/orders/useOrderMutations';
 import { clearBookingDraft, getBookingDraft } from '../../../src/state/bookingDraft';
 import { getErrorMessage } from '../../../src/lib/errors';
 
+const CITY_LABEL_KEYS = {
+  rabat: 'booking.cityRabat',
+  sale: 'booking.citySale',
+  temara: 'booking.cityTemara',
+} as const;
+
+function formatDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  if (hours === 0) return `${mins}min`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h${mins.toString().padStart(2, '0')}`;
+}
+
 export default function BookingConfirmScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const draft = getBookingDraft();
   const createOrder = useCreateOrder();
-  const [location, setLocation] = useState('');
+  const [exactAddress, setExactAddress] = useState('');
 
   useEffect(() => {
     if (!draft) {
@@ -25,9 +41,24 @@ export default function BookingConfirmScreen() {
     return null;
   }
 
+  const selectedNeighborhood = draft.neighborhoodId
+    ? NEIGHBORHOODS.find((item) => item.id === draft.neighborhoodId) ?? null
+    : null;
+  const neighborhoodName = selectedNeighborhood
+    ? i18n.language.startsWith('ar')
+      ? selectedNeighborhood.nameAr
+      : selectedNeighborhood.name
+    : null;
+  const neighborhoodDisplay = selectedNeighborhood
+    ? `${neighborhoodName}, ${t(CITY_LABEL_KEYS[selectedNeighborhood.city])}`
+    : t('booking.selectNeighborhood');
+  const orderLocation = selectedNeighborhood
+    ? `${exactAddress.trim()}, ${neighborhoodDisplay}`
+    : exactAddress.trim();
+
   return (
-    <SafeAreaView style={styles.container}>
-      <BackHeader title={t('booking.confirmBookingTitle')} />
+    <View style={styles.container}>
+      <ScreenHeader title={t('booking.confirmBookingTitle')} />
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.summaryCard}>
           <Text style={styles.sectionLabel}>{t('booking.serviceLabel')}</Text>
@@ -50,23 +81,36 @@ export default function BookingConfirmScreen() {
 
           <View style={styles.priceRow}>
             <View>
-              <Text style={styles.sectionLabel}>{t('orders.floorPrice')}</Text>
-              <Text style={styles.price}>{draft.estimate.floorPrice} MAD</Text>
+              <Text style={styles.sectionLabel}>{t('booking.priceEstimate')}</Text>
+              <Text style={styles.price}>{draft.estimate.recommendedPrice} MAD</Text>
             </View>
             <View style={styles.durationPill}>
               <Ionicons name="time-outline" size={spacing.md + spacing.xs} color={colors.clay} />
               <Text style={styles.durationText}>
-                {`${draft.estimate.durationMinutes.min}-${draft.estimate.durationMinutes.max} min`}
+                {`${formatDuration(draft.estimate.durationMinutes.min)} - ${formatDuration(
+                  draft.estimate.durationMinutes.max,
+                )}`}
               </Text>
             </View>
           </View>
         </Card>
 
         <Card style={styles.locationCard}>
+          <Text style={styles.sectionLabel}>{t('booking.neighborhood')}</Text>
+          <View style={styles.neighborhoodRow}>
+            <View style={styles.neighborhoodInfo}>
+              <Ionicons name="location-outline" size={spacing.md + spacing.xs} color={colors.clay} />
+              <Text style={styles.neighborhoodText}>{neighborhoodDisplay}</Text>
+            </View>
+            <Pressable onPress={() => router.back()}>
+              <Text style={styles.changeText}>{t('booking.change')}</Text>
+            </Pressable>
+          </View>
+
           <Input
-            label={t('booking.address')}
-            value={location}
-            onChangeText={setLocation}
+            label={t('booking.exactAddress')}
+            value={exactAddress}
+            onChangeText={setExactAddress}
             placeholder={t('booking.addressPlaceholder')}
             leftElement={<Ionicons name="location-outline" size={spacing.md + spacing.xs} color={colors.clay} />}
           />
@@ -77,7 +121,7 @@ export default function BookingConfirmScreen() {
           label={t('booking.confirmAndSearch')}
           loading={createOrder.isPending}
           onPress={() => {
-            if (!location.trim()) {
+            if (!exactAddress.trim()) {
               Alert.alert(t('booking.addressRequired'), t('booking.addressRequiredMsg'));
               return;
             }
@@ -85,7 +129,11 @@ export default function BookingConfirmScreen() {
             createOrder.mutate(
               {
                 serviceType: draft.serviceType,
-                location: location.trim(),
+                location: orderLocation,
+                neighborhoodId: draft.neighborhoodId,
+                scheduledDate: draft.schedule?.selectedDate,
+                scheduledTimeSlot: draft.schedule?.selectedTimeSlot,
+                demandLevel: draft.schedule?.demandLevel,
                 detail: draft.detail as never,
               },
               {
@@ -104,13 +152,45 @@ export default function BookingConfirmScreen() {
           }}
         />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  header: {
+    backgroundColor: colors.navy,
+    paddingTop: Platform.OS === 'ios' ? 64 : 40,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg + spacing.xs,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.whiteA12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnPressed: {
+    transform: [{ scale: 0.93 }],
+    opacity: 0.8,
+  },
+  headerTitle: {
+    fontFamily: fonts.nunito.bold,
+    fontSize: 20,
+    color: colors.white,
+    flex: 1,
+  },
   content: {
+    paddingTop: spacing.lg,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing['2xl'],
     gap: spacing.md,
@@ -167,7 +247,35 @@ const styles = StyleSheet.create({
     color: colors.clay,
   },
   locationCard: {
+    gap: spacing.md,
     borderRadius: radius.xl,
     ...shadows.sm,
+  },
+  neighborhoodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgAlt,
+    paddingVertical: spacing.sm + spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  neighborhoodInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  neighborhoodText: {
+    ...textStyles.h3,
+    color: colors.navy,
+    flexShrink: 1,
+  },
+  changeText: {
+    ...textStyles.label,
+    color: colors.clay,
   },
 });

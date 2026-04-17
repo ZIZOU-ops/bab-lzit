@@ -8,8 +8,6 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
-import { createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
-import type { AppRouter } from '@babloo/api/src/trpc/router';
 import { API_URL } from '../constants/config';
 import {
   clearAuthTokens,
@@ -61,20 +59,36 @@ type TokenPair = {
   refreshToken: string;
 };
 
-function createClient(accessToken?: string) {
-  return createTRPCUntypedClient({
-    links: [
-      httpBatchLink({
-        url: `${API_URL}/trpc`,
-        headers() {
-          if (!accessToken) {
-            return {};
-          }
-          return { Authorization: `Bearer ${accessToken}` };
-        },
-      }),
-    ],
+async function trpcCall<T>(
+  path: string,
+  type: 'query' | 'mutation',
+  input?: unknown,
+  accessToken?: string,
+): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+  const url =
+    type === 'query' && input === undefined
+      ? `${API_URL}/trpc/${path}`
+      : type === 'query'
+        ? `${API_URL}/trpc/${path}?input=${encodeURIComponent(JSON.stringify(input))}`
+        : `${API_URL}/trpc/${path}`;
+
+  const res = await fetch(url, {
+    method: type === 'mutation' ? 'POST' : 'GET',
+    headers,
+    ...(type === 'mutation' ? { body: JSON.stringify(input) } : {}),
   });
+
+  const json = await res.json();
+
+  if (!res.ok || json.error) {
+    const message = json.error?.message ?? `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
+
+  return json.result.data as T;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -92,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchCurrentUser = useCallback(async (accessToken: string) => {
-    return createClient(accessToken).query('user.me', undefined) as Promise<AuthUser>;
+    return trpcCall<AuthUser>('user.me', 'query', undefined, accessToken);
   }, []);
 
   const applySession = useCallback(
@@ -123,9 +137,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const refreshed = (await createClient().mutation('auth.refresh', {
+        const refreshed = await trpcCall<TokenPair>('auth.refresh', 'mutation', {
           refreshToken,
-        })) as TokenPair;
+        });
         await applySession({
           accessToken: refreshed.accessToken,
           refreshToken: refreshed.refreshToken,
@@ -200,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (input: { email: string; password: string }) => {
-      const result = (await createClient().mutation('auth.login', input)) as TokenPair;
+      const result = await trpcCall<TokenPair>('auth.login', 'mutation', input);
       await applySession({
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
@@ -211,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = useCallback(
     async (input: SignupInput) => {
-      const result = (await createClient().mutation('auth.signup', input)) as TokenPair;
+      const result = await trpcCall<TokenPair>('auth.signup', 'mutation', input);
       await applySession({
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
@@ -221,12 +235,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const requestOtp = useCallback(async (input: OtpRequestInput) => {
-    return createClient().mutation('auth.otpRequest', input) as Promise<{ challengeId: string }>;
+    return trpcCall<{ challengeId: string }>('auth.otpRequest', 'mutation', input);
   }, []);
 
   const loginWithOtp = useCallback(
     async (input: OtpVerifyInput) => {
-      const result = (await createClient().mutation('auth.otpVerify', input)) as TokenPair;
+      const result = await trpcCall<TokenPair>('auth.otpVerify', 'mutation', input);
       await applySession({
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
@@ -239,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refreshToken = await getStoredRefreshToken();
     if (refreshToken && token) {
       try {
-        await createClient(token).mutation('auth.logout', { refreshToken });
+        await trpcCall('auth.logout', 'mutation', { refreshToken }, token);
       } catch {
         // Best effort logout.
       }

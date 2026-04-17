@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { otpVerifySchema } from '@babloo/shared';
 import { useTranslation } from 'react-i18next';
 import { BackHeader, Button, Card } from '../../src/components/ui';
 import { colors, radius, shadows, spacing, textStyles } from '../../src/constants/theme';
+import { useClampedKeyboardLift } from '../../src/hooks/useClampedKeyboardLift';
 import { getErrorMessage } from '../../src/lib/errors';
 import { useAuth } from '../../src/providers/AuthProvider';
 
@@ -27,6 +28,7 @@ export default function OtpScreen() {
   const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const { translateY, onCardLayout, onContainerLayout, setProtectedBottom } = useClampedKeyboardLift();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -90,58 +92,67 @@ export default function OtpScreen() {
     <SafeAreaView style={styles.container}>
       <BackHeader title={t('auth.otpTitle')} />
 
-      <View style={styles.content}>
-        <Text style={styles.title}>{t('auth.otpTitle')}</Text>
-        <Text style={styles.subtitle}>{t('auth.otpSubtitle', { phone: params.phone ?? '' })}</Text>
+      <View style={styles.content} onLayout={onContainerLayout}>
+        <View
+          onLayout={(event) => {
+            const { y, height } = event.nativeEvent.layout;
+            setProtectedBottom(y + height);
+          }}
+        >
+          <Text style={styles.title}>{t('auth.otpTitle')}</Text>
+          <Text style={styles.subtitle}>{t('auth.otpSubtitle', { phone: params.phone ?? '' })}</Text>
+        </View>
 
-        <Card style={styles.card}>
-          <Pressable style={styles.codeRow} onPress={() => inputRef.current?.focus()}>
-            {slots.map((digit, index) => (
-              <View key={index} style={[styles.slot, digit ? styles.slotFilled : null]}>
-                <Text style={styles.slotText}>{digit}</Text>
-              </View>
-            ))}
-          </Pressable>
-
-          <TextInput
-            ref={inputRef}
-            value={code}
-            onChangeText={(value) => {
-              const normalized = value.replace(/[^0-9]/g, '').slice(0, OTP_LENGTH);
-              setCode(normalized);
-            }}
-            keyboardType="number-pad"
-            maxLength={OTP_LENGTH}
-            style={styles.hiddenInput}
-            autoFocus
-            textContentType="oneTimeCode"
-          />
-
-          {error ? (
-            <View style={styles.errorBanner}>
-              <MaterialCommunityIcons name="alert-circle-outline" size={spacing.md + spacing.xs} color={colors.error} />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          <Button
-            variant="primary"
-            label={t('auth.verify')}
-            onPress={handleVerify}
-            loading={loading}
-            disabled={code.length < OTP_LENGTH}
-            style={styles.submitBtn}
-          />
-
-          <View style={styles.resendRow}>
-            <Text style={styles.resendTimer}>
-              {secondsLeft > 0 ? t('auth.resendIn', { count: secondsLeft }) : t('auth.canResend')}
-            </Text>
-            <Pressable onPress={handleResend} disabled={secondsLeft > 0} style={({ pressed }) => [pressed && styles.pressed]}>
-              <Text style={[styles.resendLink, secondsLeft > 0 && styles.resendDisabled]}>{t('auth.resendOtp')}</Text>
+        <Animated.View onLayout={onCardLayout} style={{ transform: [{ translateY }] }}>
+          <Card style={styles.card}>
+            <Pressable style={styles.codeRow} onPress={() => inputRef.current?.focus()}>
+              {slots.map((digit, index) => (
+                <View key={index} style={[styles.slot, digit ? styles.slotFilled : null]}>
+                  <Text style={styles.slotText}>{digit}</Text>
+                </View>
+              ))}
             </Pressable>
-          </View>
-        </Card>
+
+            <TextInput
+              ref={inputRef}
+              value={code}
+              onChangeText={(value) => {
+                const normalized = value.replace(/[^0-9]/g, '').slice(0, OTP_LENGTH);
+                setCode(normalized);
+              }}
+              keyboardType="number-pad"
+              maxLength={OTP_LENGTH}
+              style={styles.hiddenInput}
+              autoFocus
+              textContentType="oneTimeCode"
+            />
+
+            {error ? (
+              <View style={styles.errorBanner}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={spacing.md + spacing.xs} color={colors.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            <Button
+              variant="primary"
+              label={t('auth.verify')}
+              onPress={handleVerify}
+              loading={loading}
+              disabled={code.length < OTP_LENGTH}
+              style={styles.submitBtn}
+            />
+
+            <View style={styles.resendRow}>
+              <Text style={styles.resendTimer}>
+                {secondsLeft > 0 ? t('auth.resendIn', { count: secondsLeft }) : t('auth.canResend')}
+              </Text>
+              <Pressable onPress={handleResend} disabled={secondsLeft > 0} style={({ pressed }) => [pressed && styles.pressed]}>
+                <Text style={[styles.resendLink, secondsLeft > 0 && styles.resendDisabled]}>{t('auth.resendOtp')}</Text>
+              </Pressable>
+            </View>
+          </Card>
+        </Animated.View>
       </View>
     </SafeAreaView>
   );

@@ -45,9 +45,14 @@ export interface Order {
   floorPrice: number;
   finalPrice: number | null;
   tipAmount: number;
+  scheduledDate: string | null;
+  scheduledTimeSlot: string | null;
+  demandLevel: string | null;
+  demandMultiplier: number | null;
   scheduledStartAt: string | null;
   scheduledEndAt: string | null;
   location: string;
+  neighborhoodId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -60,8 +65,11 @@ export interface OrderDetail {
   cleanType: CleanType | null;
   teamType: TeamType | null;
   squadSize: number | null;
+  propertyType: string | null;
+  floors: number | null;
   // cuisine
   guests: number | null;
+  mealType: string | null;
   dishes: string | null;
   // childcare
   children: number | null;

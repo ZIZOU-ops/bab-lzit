@@ -1,27 +1,33 @@
 import React, { useRef } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing } from '../../constants/theme';
 
 type MessageInputProps = {
   value: string;
   onChangeText: (value: string) => void;
   onSend: () => void;
+  onOpenCamera: () => void;
   onTypingStart: () => void;
   onTypingStop: () => void;
   disabled?: boolean;
+  isUploadingImage?: boolean;
 };
 
 export function MessageInput({
   value,
   onChangeText,
   onSend,
+  onOpenCamera,
   onTypingStart,
   onTypingStop,
   disabled,
+  isUploadingImage,
 }: MessageInputProps) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const emitTyping = (nextValue: string) => {
@@ -39,36 +45,56 @@ export function MessageInput({
   };
 
   return (
-    <View style={styles.outer}>
-      <View style={styles.container}>
-        <TextInput
-          style={styles.input}
-          placeholder={t('chat.placeholder')}
-          placeholderTextColor={colors.textMuted}
-          value={value}
-          onChangeText={(nextValue) => {
-            onChangeText(nextValue);
-            emitTyping(nextValue);
-          }}
-          multiline
-          maxLength={2000}
-        />
+    <View style={[styles.outer, { paddingBottom: spacing.md + insets.bottom }]}>
+      <View style={styles.row}>
         <Pressable
           style={({ pressed }) => [
-            styles.sendButton,
-            (disabled || value.trim().length === 0) && styles.sendButtonDisabled,
-            pressed && !disabled && value.trim().length > 0 && styles.pressed,
+            styles.cameraButton,
+            disabled && styles.sendButtonDisabled,
+            pressed && !disabled && styles.pressed,
           ]}
-          onPress={() => {
-            onTypingStop();
-            onSend();
-          }}
-          disabled={disabled || value.trim().length === 0}
+          onPress={onOpenCamera}
+          disabled={disabled}
           accessibilityRole="button"
-          accessibilityLabel={t('chat.send')}
+          accessibilityLabel={t('chat.camera')}
         >
-          <Ionicons name="send" size={spacing.md + spacing.xs} color={colors.white} />
+          {isUploadingImage ? (
+            <ActivityIndicator color={colors.white} size="small" />
+          ) : (
+            <Ionicons name="camera" size={22} color={colors.white} />
+          )}
         </Pressable>
+
+        <View style={styles.container}>
+          <TextInput
+            style={styles.input}
+            placeholder={t('chat.placeholder')}
+            placeholderTextColor={colors.textMuted}
+            value={value}
+            onChangeText={(nextValue) => {
+              onChangeText(nextValue);
+              emitTyping(nextValue);
+            }}
+            multiline
+            maxLength={2000}
+          />
+          <Pressable
+            style={({ pressed }) => [
+              styles.sendButton,
+              (disabled || value.trim().length === 0) && styles.sendButtonDisabled,
+              pressed && !disabled && value.trim().length > 0 && styles.pressed,
+            ]}
+            onPress={() => {
+              onTypingStop();
+              onSend();
+            }}
+            disabled={disabled || value.trim().length === 0}
+            accessibilityRole="button"
+            accessibilityLabel={t('chat.send')}
+          >
+            <Ionicons name="send" size={spacing.md + spacing.xs} color={colors.white} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -81,9 +107,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  cameraButton: {
+    width: spacing['2xl'],
+    height: spacing['2xl'],
+    borderRadius: radius.full,
+    backgroundColor: colors.clay,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.sm,
   },
   container: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,

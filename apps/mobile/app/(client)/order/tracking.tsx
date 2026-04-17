@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { Avatar, BackHeader, Card, LoadingScreen } from '../../../src/components/ui';
-import { colors, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
+import { Avatar, Card, LoadingScreen, ScreenHeader } from '../../../src/components/ui';
+import { colors, fonts, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
 import { useOrder } from '../../../src/hooks/orders/useOrderQueries';
 import { useOrderSocket } from '../../../src/hooks/orders/useOrderSocket';
 
@@ -29,8 +29,8 @@ export default function OrderTrackingScreen() {
   const showProCard = order.status === 'en_route' || order.status === 'in_progress';
 
   return (
-    <SafeAreaView style={styles.container}>
-      <BackHeader title={t('tracking.title')} />
+    <View style={styles.container}>
+      <ScreenHeader title={t('tracking.title')} />
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.statusCard}>
           <Text style={styles.sectionLabel}>{t('tracking.currentStatus')}</Text>
@@ -114,13 +114,44 @@ export default function OrderTrackingScreen() {
           </View>
         </Card>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing['2xl'], gap: spacing.md },
+  header: {
+    backgroundColor: colors.navy,
+    paddingTop: Platform.OS === 'ios' ? 64 : 40,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg + spacing.xs,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.whiteA12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnPressed: {
+    transform: [{ scale: 0.93 }],
+    opacity: 0.8,
+  },
+  headerTitle: {
+    fontFamily: fonts.nunito.bold,
+    fontSize: 20,
+    color: colors.white,
+    flex: 1,
+  },
+  content: { paddingTop: spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: spacing['2xl'], gap: spacing.md },
   statusCard: {
     gap: spacing.xs,
     borderRadius: radius.xl,

@@ -49,7 +49,7 @@ async function setupNegotiatingOrder() {
     location: 'Casablanca',
     detail: {
       serviceType: 'menage',
-      surface: 70,
+      surface: 200,
       cleanType: 'simple',
       teamType: 'duo',
     },
@@ -132,10 +132,69 @@ describe('negotiation.router', () => {
 
     const offer = await proCaller.negotiation.createOffer({
       orderId: order.id,
-      amount: 150,
+      amount: 255,
     });
 
-    expect(offer.amount).toBe(150);
+    expect(offer.amount).toBe(255);
+  });
+
+  it('pro can offer at floor x 0.9', async () => {
+    const { order, proCaller } = await setupNegotiatingOrder();
+    const discountedFloor = Math.round(order.floorPrice * 0.9);
+
+    expect(order.floorPrice).toBe(250);
+    expect(discountedFloor).toBe(225);
+
+    const offer = await proCaller.negotiation.createOffer({
+      orderId: order.id,
+      amount: discountedFloor,
+    });
+
+    expect(offer.amount).toBe(discountedFloor);
+  });
+
+  it('pro cannot offer below floor x 0.9', async () => {
+    const { order, proCaller } = await setupNegotiatingOrder();
+    const discountedFloor = Math.round(order.floorPrice * 0.9);
+
+    try {
+      await proCaller.negotiation.createOffer({
+        orderId: order.id,
+        amount: discountedFloor - 5,
+      });
+      throw new Error('Expected amount out of bounds');
+    } catch (error) {
+      const trpcError = error as TRPCError;
+      expect(trpcError.code).toBe('BAD_REQUEST');
+      expect(extractAppCode(error)).toBe(ERROR_CODES.NEG_AMOUNT_OUT_OF_BOUNDS);
+    }
+  });
+
+  it('client cannot offer below floor', async () => {
+    const { order, clientCaller } = await setupNegotiatingOrder();
+
+    try {
+      await clientCaller.negotiation.createOffer({
+        orderId: order.id,
+        amount: order.floorPrice - 5,
+      });
+      throw new Error('Expected amount out of bounds');
+    } catch (error) {
+      const trpcError = error as TRPCError;
+      expect(trpcError.code).toBe('BAD_REQUEST');
+      expect(extractAppCode(error)).toBe(ERROR_CODES.NEG_AMOUNT_OUT_OF_BOUNDS);
+    }
+  });
+
+  it('client can offer exactly at floor', async () => {
+    const { order, clientCaller } = await setupNegotiatingOrder();
+
+    const offer = await clientCaller.negotiation.createOffer({
+      orderId: order.id,
+      amount: order.floorPrice,
+    });
+
+    expect(offer.amount).toBe(order.floorPrice);
   });
 
   it('create offer outside bounds fails (NEG_204)', async () => {
@@ -160,7 +219,7 @@ describe('negotiation.router', () => {
     try {
       await proCaller.negotiation.createOffer({
         orderId: order.id,
-        amount: 151,
+        amount: 251,
       });
       throw new Error('Expected bad increment');
     } catch (error) {
@@ -175,7 +234,7 @@ describe('negotiation.router', () => {
 
     const offer = await proCaller.negotiation.createOffer({
       orderId: order.id,
-      amount: 155,
+      amount: 260,
     });
 
     const accepted = await clientCaller.negotiation.acceptOffer({
@@ -183,10 +242,10 @@ describe('negotiation.router', () => {
       offerId: offer.id,
     });
 
-    expect(accepted.finalPrice).toBe(155);
+    expect(accepted.finalPrice).toBe(260);
 
     const refreshedOrder = await db.order.findUniqueOrThrow({ where: { id: order.id } });
-    expect(refreshedOrder.finalPrice).toBe(155);
+    expect(refreshedOrder.finalPrice).toBe(260);
   });
 
   it('accept own offer fails', async () => {
@@ -194,7 +253,7 @@ describe('negotiation.router', () => {
 
     const ownOffer = await clientCaller.negotiation.createOffer({
       orderId: order.id,
-      amount: 160,
+      amount: order.floorPrice,
     });
 
     await expect(
@@ -242,7 +301,7 @@ describe('negotiation.router', () => {
 
     await proCaller.negotiation.createOffer({
       orderId: order.id,
-      amount: 150,
+      amount: 255,
     });
 
     const poll = await clientCaller.negotiation.poll({

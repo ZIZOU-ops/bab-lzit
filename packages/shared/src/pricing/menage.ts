@@ -1,25 +1,29 @@
-import type { MenageParams, PriceResult } from './types';
+import type { TeamType } from '../types/enums';
+import type { MenageParams, PriceResult, PropertyType } from './types';
 import { NEGOTIATION_CEILING_MULTIPLIER, MIN_SQUAD_PAY_PER_EMPLOYEE_MAD } from './types';
 
-interface Bracket {
-  maxSurface: number;
-  solo: number;
-  duo: number | null;
-  squad: number | null;
-}
+const SURFACE_EXPONENT = 0.45;
 
-const BRACKETS: Bracket[] = [
-  { maxSurface: 40, solo: 80, duo: null, squad: null },
-  { maxSurface: 70, solo: 100, duo: 140, squad: null },
-  { maxSurface: 110, solo: 130, duo: 170, squad: null },
-  { maxSurface: 160, solo: 170, duo: 210, squad: 270 },
-  { maxSurface: 220, solo: 210, duo: 260, squad: 320 },
-  { maxSurface: 300, solo: 260, duo: 320, squad: 400 },
-];
+const TEAM_COEFFICIENTS: Record<TeamType, number> = {
+  solo: 17,
+  duo: 23,
+  squad: 32,
+};
 
-const SURCHARGE_PER_50M2 = { solo: 35, duo: 45, squad: 55 } as const;
-
-const DEEP_MULTIPLIER = 1.35;
+const LABOR_FLOOR_PER_WORKER = 120;
+const PROPERTY_MULTIPLIERS: Record<PropertyType, number> = {
+  apartment: 1.0,
+  villa: 1.3,
+  riad: 1.2,
+  office: 0.9,
+};
+const FLOORS_MULTIPLIERS: Record<number, number> = {
+  1: 1.0,
+  2: 1.15,
+  3: 1.25,
+};
+const SQUAD_EXTRA_MEMBER_SURCHARGE = 80;
+const DEEP_PREMIUM = 0.8;
 
 interface DurationRange {
   maxSurface: number;
@@ -37,52 +41,42 @@ const DURATION_RANGES: DurationRange[] = [
 const TEAM_DURATION_MULTIPLIER = { solo: 1.0, duo: 0.65, squad: 0.5 } as const;
 
 export function computeMenagePrice(params: MenageParams): PriceResult {
-  const { surface, teamType, cleanType, squadSize = 3 } = params;
+  const {
+    surface,
+    teamType,
+    cleanType,
+    squadSize = 3,
+    propertyType = 'apartment',
+    floors = 1,
+  } = params;
+  const workers = teamType === 'solo' ? 1 : teamType === 'duo' ? 2 : squadSize;
 
-  // Find bracket
-  const bracket = BRACKETS.find((b) => surface <= b.maxSurface);
+  let basePrice = Math.round(
+    TEAM_COEFFICIENTS[teamType] * Math.pow(surface, SURFACE_EXPONENT),
+  );
 
-  let basePrice: number;
-
-  if (bracket) {
-    const teamPrice = bracket[teamType];
-    if (teamPrice === null) {
-      const fallbackBracket = BRACKETS.find((b) => b[teamType] !== null);
-      if (!fallbackBracket) {
-        throw new Error(`Team type '${teamType}' is not supported for any surface`);
-      }
-      basePrice = fallbackBracket[teamType]!;
-    } else {
-      basePrice = teamPrice;
-    }
-  } else {
-    // Over 300m²: use 300m² base + surcharge per extra 50m² block
-    const lastBracket = BRACKETS[BRACKETS.length - 1]!;
-    const base300 = lastBracket[teamType];
-    let baseForTeam: number;
-    if (base300 === null) {
-      const fallbackBracket = BRACKETS.find((b) => b[teamType] !== null);
-      if (!fallbackBracket) {
-        throw new Error(`Team type '${teamType}' is not supported for any surface`);
-      }
-      baseForTeam = fallbackBracket[teamType]!;
-    } else {
-      baseForTeam = base300;
-    }
-    const extraBlocks = Math.ceil((surface - 300) / 50);
-    basePrice = baseForTeam + extraBlocks * SURCHARGE_PER_50M2[teamType];
+  if (teamType === 'squad' && squadSize > 3) {
+    basePrice += (squadSize - 3) * SQUAD_EXTRA_MEMBER_SURCHARGE;
   }
 
-  // Deep clean multiplier
   if (cleanType === 'deep') {
-    basePrice = Math.round(basePrice * DEEP_MULTIPLIER);
+    const teamDeepMultiplier =
+      Math.round((1 + DEEP_PREMIUM / workers) * 100) / 100;
+    basePrice = Math.round(basePrice * teamDeepMultiplier);
   }
 
-  // Squad minimum pay guarantee
   if (teamType === 'squad') {
-    const squadFloor = squadSize * MIN_SQUAD_PAY_PER_EMPLOYEE_MAD;
-    basePrice = Math.max(basePrice, squadFloor);
+    basePrice = Math.max(basePrice, squadSize * MIN_SQUAD_PAY_PER_EMPLOYEE_MAD);
   }
+
+  const normalizedFloors = Math.min(3, Math.max(1, floors));
+  const floorsMultiplier =
+    FLOORS_MULTIPLIERS[normalizedFloors] ?? FLOORS_MULTIPLIERS[1]!;
+  const floorPrice = Math.round(
+    basePrice * PROPERTY_MULTIPLIERS[propertyType] * floorsMultiplier,
+  );
+  const laborFloor = workers * LABOR_FLOOR_PER_WORKER;
+  const finalPrice = Math.max(floorPrice, laborFloor);
 
   // Duration estimate
   const durRange =
@@ -91,8 +85,8 @@ export function computeMenagePrice(params: MenageParams): PriceResult {
   const multiplier = TEAM_DURATION_MULTIPLIER[teamType];
 
   return {
-    floorPrice: basePrice,
-    ceiling: Math.round(basePrice * NEGOTIATION_CEILING_MULTIPLIER),
+    floorPrice: finalPrice,
+    ceiling: Math.round(finalPrice * NEGOTIATION_CEILING_MULTIPLIER),
     durationMinutes: {
       min: Math.round(durRange.base.min * multiplier),
       max: Math.round(durRange.base.max * multiplier),

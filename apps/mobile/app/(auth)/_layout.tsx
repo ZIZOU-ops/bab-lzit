@@ -2,6 +2,7 @@ import React from 'react';
 import { Redirect, Stack } from 'expo-router';
 import { ErrorBoundary, LoadingScreen } from '../../src/components/ui';
 import { useAuth } from '../../src/providers/AuthProvider';
+import { colors } from '../../src/constants/theme';
 
 export default function AuthLayout() {
   const { state, user } = useAuth();
@@ -23,6 +24,7 @@ export default function AuthLayout() {
         screenOptions={{
           headerShown: false,
           animation: 'slide_from_right',
+          contentStyle: { backgroundColor: colors.navy },
         }}
       >
         <Stack.Screen name="index" />
@@ -30,8 +32,14 @@ export default function AuthLayout() {
         <Stack.Screen name="sign-in-phone" />
         <Stack.Screen name="sign-up-email" />
         <Stack.Screen name="sign-up-phone" />
-        <Stack.Screen name="otp" />
-        <Stack.Screen name="forgot-password" />
+        <Stack.Screen
+          name="otp"
+          options={{ contentStyle: { backgroundColor: colors.bg } }}
+        />
+        <Stack.Screen
+          name="forgot-password"
+          options={{ contentStyle: { backgroundColor: colors.bg } }}
+        />
       </Stack>
     </ErrorBoundary>
   );

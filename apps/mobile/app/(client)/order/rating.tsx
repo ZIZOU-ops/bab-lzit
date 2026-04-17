@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { BackHeader, Button, Card, LoadingScreen } from '../../../src/components/ui';
-import { colors, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
+import { Button, Card, LoadingScreen, ScreenHeader } from '../../../src/components/ui';
+import { colors, fonts, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
 import { useOrder } from '../../../src/hooks/orders/useOrderQueries';
 import { useRateOrder } from '../../../src/hooks/orders/useOrderMutations';
 import { getErrorMessage } from '../../../src/lib/errors';
@@ -25,21 +25,21 @@ export default function OrderRatingScreen() {
 
   if (orderQuery.data.rating) {
     return (
-      <SafeAreaView style={styles.container}>
-        <BackHeader title={t('rating.title')} onBack={() => router.back()} />
+      <View style={styles.container}>
+        <ScreenHeader title={t('rating.title')} />
         <View style={styles.centered}>
           <Card style={styles.alreadyRatedCard}>
             <Text style={styles.title}>{t('rating.alreadyRated')}</Text>
             <Button variant="outline" label={t('rating.backToOrder')} onPress={() => router.back()} />
           </Card>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <BackHeader title={t('rating.title')} />
+    <View style={styles.container}>
+      <ScreenHeader title={t('rating.title')} />
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.block}>
           <Text style={styles.blockTitle}>{t('rating.stars')}</Text>
@@ -105,12 +105,43 @@ export default function OrderRatingScreen() {
           }}
         />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  header: {
+    backgroundColor: colors.navy,
+    paddingTop: Platform.OS === 'ios' ? 64 : 40,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg + spacing.xs,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.whiteA12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnPressed: {
+    transform: [{ scale: 0.93 }],
+    opacity: 0.8,
+  },
+  headerTitle: {
+    fontFamily: fonts.nunito.bold,
+    fontSize: 20,
+    color: colors.white,
+    flex: 1,
+  },
   centered: {
     flex: 1,
     justifyContent: 'center',
@@ -123,6 +154,7 @@ const styles = StyleSheet.create({
     ...shadows.md,
   },
   content: {
+    paddingTop: spacing.lg,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing['2xl'],
     gap: spacing.md,

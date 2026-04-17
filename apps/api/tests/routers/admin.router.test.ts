@@ -89,4 +89,48 @@ describe('admin.router', () => {
 
     expect(updated.isActive).toBe(false);
   });
+
+  it('admin can set demand slots for a date', async () => {
+    const { user: admin } = await createTestUser({ role: 'admin' });
+    const caller = createTestCaller({ id: admin.id, role: 'admin' });
+
+    const result = await caller.admin.setDemandSlots({
+      date: '2026-03-25',
+      slots: [
+        { timeSlot: 'morning', level: 'yellow' },
+        { timeSlot: 'evening', level: 'red' },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+
+    const slots = await db.demandSlot.findMany({
+      where: { date: new Date('2026-03-25T00:00:00.000Z') },
+      orderBy: { timeSlot: 'asc' },
+    });
+    expect(slots).toHaveLength(2);
+    expect(slots[0]?.level).toBe('red');
+    expect(slots[1]?.level).toBe('yellow');
+  });
+
+  it('admin can bulk set demand over a range', async () => {
+    const { user: admin } = await createTestUser({ role: 'admin' });
+    const caller = createTestCaller({ id: admin.id, role: 'admin' });
+
+    const result = await caller.admin.bulkSetDemand({
+      startDate: '2026-03-26',
+      endDate: '2026-03-27',
+      level: 'yellow',
+      timeSlots: ['afternoon'],
+    });
+
+    expect(result.success).toBe(true);
+
+    const slots = await db.demandSlot.findMany({
+      where: { timeSlot: 'afternoon' },
+      orderBy: { date: 'asc' },
+    });
+    expect(slots).toHaveLength(2);
+    expect(slots.every((slot) => slot.level === 'yellow')).toBe(true);
+  });
 });

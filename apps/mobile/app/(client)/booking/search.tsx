@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { BackHeader, Button, Card } from '../../../src/components/ui';
-import { colors, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
+import { Button, Card, ScreenHeader } from '../../../src/components/ui';
+import { colors, fonts, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
 import { useOrder } from '../../../src/hooks/orders/useOrderQueries';
 
 export default function BookingSearchScreen() {
@@ -32,8 +32,8 @@ export default function BookingSearchScreen() {
   }, [orderQuery.data?.status]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <BackHeader title={t('booking.searchingTeam')} onBack={() => router.back()} />
+    <View style={styles.container}>
+      <ScreenHeader title={t('booking.searchingTeam')} />
 
       <View style={styles.content}>
         {!isMatched ? (
@@ -72,14 +72,46 @@ export default function BookingSearchScreen() {
           </Card>
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  header: {
+    backgroundColor: colors.navy,
+    paddingTop: Platform.OS === 'ios' ? 64 : 40,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg + spacing.xs,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.whiteA12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnPressed: {
+    transform: [{ scale: 0.93 }],
+    opacity: 0.8,
+  },
+  headerTitle: {
+    fontFamily: fonts.nunito.bold,
+    fontSize: 20,
+    color: colors.white,
+    flex: 1,
+  },
   content: {
     flex: 1,
+    paddingTop: spacing.lg,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing['2xl'],
     justifyContent: 'center',

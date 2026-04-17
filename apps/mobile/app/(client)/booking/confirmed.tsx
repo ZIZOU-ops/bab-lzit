@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { BackHeader, Button, Card } from '../../../src/components/ui';
-import { colors, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
+import { Button, Card, ScreenHeader } from '../../../src/components/ui';
+import { colors, fonts, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
 
 export default function BookingConfirmedScreen() {
   const { t } = useTranslation();
@@ -33,8 +33,8 @@ export default function BookingConfirmedScreen() {
   }, [pulse]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <BackHeader title={t('booking.orderConfirmed')} onBack={() => router.replace('/(client)/(tabs)')} />
+    <View style={styles.container}>
+      <ScreenHeader title={t('booking.orderConfirmed')} onBack={() => router.replace('/(client)/(tabs)')} />
 
       <View style={styles.content}>
         <Card style={styles.card}>
@@ -58,14 +58,46 @@ export default function BookingConfirmedScreen() {
           />
         </Card>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  header: {
+    backgroundColor: colors.navy,
+    paddingTop: Platform.OS === 'ios' ? 64 : 40,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg + spacing.xs,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.whiteA12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnPressed: {
+    transform: [{ scale: 0.93 }],
+    opacity: 0.8,
+  },
+  headerTitle: {
+    fontFamily: fonts.nunito.bold,
+    fontSize: 20,
+    color: colors.white,
+    flex: 1,
+  },
   content: {
     flex: 1,
+    paddingTop: spacing.lg,
     paddingHorizontal: spacing.lg,
     justifyContent: 'center',
     paddingBottom: spacing['2xl'],

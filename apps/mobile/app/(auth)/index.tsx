@@ -1,15 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
+  LayoutChangeEvent,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import ReanimatedAnimated, {
-  FadeIn,
-  useAnimatedScrollHandler,
-  useSharedValue,
-} from 'react-native-reanimated';
-import { Button, Card } from '../../src/components/ui';
+import { Button } from '../../src/components/ui';
 import { AnimatedAuthHeader } from '../../src/components/AnimatedAuthHeader';
+import { BablooLogo } from '../../src/components/BablooLogo';
 import { colors, fonts, radius, shadows, spacing, textStyles } from '../../src/constants/theme';
 
 type AuthMode = 'signIn' | 'signUp';
@@ -19,12 +27,10 @@ export default function AuthEntryScreen() {
   const [mode, setMode] = useState<AuthMode>('signIn');
   const [tabWidth, setTabWidth] = useState(0);
   const indicator = useRef(new Animated.Value(0)).current;
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
-    },
-  });
+
+  // ── Card entrance animation ──
+  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const cardTranslateY = useRef(new Animated.Value(40)).current;
 
   const onTabsLayout = useCallback((e: LayoutChangeEvent) => {
     const innerWidth = e.nativeEvent.layout.width - spacing.xs * 2;
@@ -38,6 +44,25 @@ export default function AuthEntryScreen() {
       bounciness: 8,
     }).start();
   }, [indicator, mode]);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(cardOpacity, {
+        toValue: 1,
+        duration: 700,
+        delay: 500,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardTranslateY, {
+        toValue: 0,
+        delay: 500,
+        useNativeDriver: true,
+        damping: 16,
+        stiffness: 80,
+      }),
+    ]).start();
+  }, [cardOpacity, cardTranslateY]);
 
   const methods = useMemo(() => {
     if (mode === 'signIn') {
@@ -74,132 +99,152 @@ export default function AuthEntryScreen() {
   }, [mode, t]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ReanimatedAnimated.ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
+    <View style={styles.container}>
+      <StatusBar style="light" />
+      {/* ── Full-bleed breathing gradient background ── */}
+      <AnimatedAuthHeader />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <AnimatedAuthHeader scrollY={scrollY} />
-        <ReanimatedAnimated.Text
-          entering={FadeIn.delay(500).duration(800)}
-          style={styles.slogan}
+        {/* ── Floating auth card ── */}
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={[styles.scrollContent, { flexGrow: 1 }]}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
         >
-          {t('auth.slogan')}
-        </ReanimatedAnimated.Text>
+          <Animated.View
+            style={[
+              styles.cardOuter,
+              {
+                opacity: cardOpacity,
+                transform: [{ translateY: cardTranslateY }],
+              },
+            ]}
+          >
+            <View style={styles.card}>
+              {/* Logo inside card */}
+              <View style={styles.logoRow}>
+                <BablooLogo size={70} fillColor={colors.navy} />
+              </View>
 
-        {/* ── Auth card ── */}
-        <Card style={styles.card}>
-          {/* Tabs */}
-          <View style={styles.tabs} onLayout={onTabsLayout}>
-            {tabWidth > 0 && (
-              <Animated.View
-                style={[
-                  styles.tabIndicator,
-                  {
-                    width: tabWidth,
-                    transform: [
+              {/* Tabs */}
+              <View style={styles.tabs} onLayout={onTabsLayout}>
+                {tabWidth > 0 && (
+                  <Animated.View
+                    style={[
+                      styles.tabIndicator,
                       {
-                        translateX: indicator.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, tabWidth],
-                        }),
+                        width: tabWidth,
+                        transform: [
+                          {
+                            translateX: indicator.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, tabWidth],
+                            }),
+                          },
+                        ],
                       },
-                    ],
-                  },
-                ]}
-              />
-            )}
+                    ]}
+                  />
+                )}
 
-            <Pressable style={styles.tabBtn} onPress={() => setMode('signIn')}>
-              <Text style={[styles.tabText, mode === 'signIn' && styles.tabTextActive]}>
-                {t('auth.signInTab')}
-              </Text>
-            </Pressable>
-            <Pressable style={styles.tabBtn} onPress={() => setMode('signUp')}>
-              <Text style={[styles.tabText, mode === 'signUp' && styles.tabTextActive]}>
-                {t('auth.signUpTab')}
-              </Text>
-            </Pressable>
-          </View>
+                <Pressable style={styles.tabBtn} onPress={() => setMode('signIn')}>
+                  <Text style={[styles.tabText, mode === 'signIn' && styles.tabTextActive]}>
+                    {t('auth.signInTab')}
+                  </Text>
+                </Pressable>
+                <Pressable style={styles.tabBtn} onPress={() => setMode('signUp')}>
+                  <Text style={[styles.tabText, mode === 'signUp' && styles.tabTextActive]}>
+                    {t('auth.signUpTab')}
+                  </Text>
+                </Pressable>
+              </View>
 
-          {/* Methods */}
-          <View style={styles.methods}>
-            {methods.map((method) => (
-              <Pressable
-                key={method.key}
-                style={({ pressed }) => [styles.methodBtn, pressed && styles.pressed]}
-                onPress={method.onPress}
-              >
-                <View style={styles.methodIcon}>{method.icon}</View>
-                <Text style={styles.methodLabel}>{method.label}</Text>
-                <Ionicons name="chevron-forward" size={spacing.lg} color={colors.textMuted} />
-              </Pressable>
-            ))}
-          </View>
+              {/* Methods */}
+              <View style={styles.methods}>
+                {methods.map((method) => (
+                  <Pressable
+                    key={method.key}
+                    style={({ pressed }) => [styles.methodBtn, pressed && styles.pressed]}
+                    onPress={method.onPress}
+                  >
+                    <View style={styles.methodIcon}>{method.icon}</View>
+                    <Text style={styles.methodLabel}>{method.label}</Text>
+                    <Ionicons name="chevron-forward" size={spacing.lg} color={colors.textMuted} />
+                  </Pressable>
+                ))}
+              </View>
 
-          {/* Divider */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>{t('auth.or')}</Text>
-            <View style={styles.dividerLine} />
-          </View>
+              {/* Divider */}
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>{t('auth.or')}</Text>
+                <View style={styles.dividerLine} />
+              </View>
 
-          {/* SSO */}
-          <View style={styles.ssoRow}>
-            <Button
-              variant="outline"
-              label={t('auth.continueGoogle')}
-              onPress={() => undefined}
-              icon={<Ionicons name="logo-google" size={spacing.md + spacing.xs} color={colors.navy} />}
-              style={styles.ssoBtn}
-            />
-            <Button
-              variant="primary"
-              label={t('auth.continueApple')}
-              onPress={() => undefined}
-              icon={<Ionicons name="logo-apple" size={spacing.md + spacing.xs} color={colors.white} />}
-              style={styles.ssoBtn}
-            />
-          </View>
+              {/* SSO */}
+              <View style={styles.ssoRow}>
+                <Button
+                  variant="outline"
+                  label={t('auth.continueGoogle')}
+                  onPress={() => undefined}
+                  icon={<Ionicons name="logo-google" size={spacing.md + spacing.xs} color={colors.navy} />}
+                  style={styles.ssoBtn}
+                />
+                <Button
+                  variant="primary"
+                  label={t('auth.continueApple')}
+                  onPress={() => undefined}
+                  icon={<Ionicons name="logo-apple" size={spacing.md + spacing.xs} color={colors.white} />}
+                  style={styles.ssoBtn}
+                />
+              </View>
 
-          {/* Legal */}
-          <Text style={styles.legal}>{t('auth.legal')}</Text>
-        </Card>
-      </ReanimatedAnimated.ScrollView>
-    </SafeAreaView>
+              {/* Legal */}
+              <Text style={styles.legal}>{t('auth.legal')}</Text>
+            </View>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.navy,
   },
+  flex: {
+    flex: 1,
+  },
+  /* ── Card positioning ── */
   scrollContent: {
-    flexGrow: 1,
-    paddingBottom: spacing['2xl'],
-  },
-
-  /* ── Slogan ── */
-  slogan: {
-    fontFamily: fonts.dmSans.regular,
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textSec,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
+    justifyContent: 'flex-end',
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
 
   /* ── Card ── */
-  card: {
-    marginHorizontal: spacing.lg,
+  cardOuter: {
     borderRadius: radius.xl,
+    overflow: 'hidden',
+    ...shadows.xl,
+  },
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.85)',
     padding: spacing.lg,
     gap: spacing.md,
-    ...shadows.md,
+  },
+
+  /* ── Logo ── */
+  logoRow: {
+    alignItems: 'center',
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
   },
 
   /* ── Tabs ── */
@@ -254,7 +299,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.clayTint,
+    backgroundColor: 'transparent',
   },
   methodLabel: {
     ...textStyles.body,
@@ -272,11 +317,11 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: colors.borderStrong,
   },
   dividerText: {
     ...textStyles.body,
-    color: colors.textMuted,
+    color: colors.textSec,
   },
 
   /* ── SSO ── */
@@ -290,7 +335,7 @@ const styles = StyleSheet.create({
   /* ── Legal ── */
   legal: {
     ...textStyles.body,
-    color: colors.textMuted,
+    color: colors.textSec,
     textAlign: 'center',
     fontSize: 11,
     lineHeight: 16,

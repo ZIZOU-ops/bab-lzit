@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AppError } from '../lib/errors';
 import { protectedProcedure, router } from '../trpc';
+import * as chatImageService from '../services/chat-image.service';
 import * as negotiationService from '../services/negotiation.service';
 
 async function withAppErrorMapping<T>(work: () => Promise<T>): Promise<T> {
@@ -25,6 +26,12 @@ const sendMessageInput = z.object({
   orderId: z.string().uuid(),
   content: z.string().max(2000),
   clientMessageId: z.string().uuid().optional(),
+});
+
+const uploadChatImageInput = z.object({
+  orderId: z.string().uuid(),
+  data: z.string().min(1).max(5_500_000),
+  mimeType: z.string().min(1).max(64),
 });
 
 const offersInput = z.object({
@@ -72,6 +79,22 @@ export const negotiationRouter = router({
             userId: ctx.user.id,
             content: input.content,
             clientMessageId: input.clientMessageId,
+          },
+        ),
+      ),
+    ),
+
+  uploadChatImage: protectedProcedure
+    .input(uploadChatImageInput)
+    .mutation(({ ctx, input }) =>
+      withAppErrorMapping(() =>
+        chatImageService.uploadChatImage(
+          { db: ctx.db, logger: ctx.logger },
+          {
+            orderId: input.orderId,
+            userId: ctx.user.id,
+            data: input.data,
+            mimeType: input.mimeType,
           },
         ),
       ),
