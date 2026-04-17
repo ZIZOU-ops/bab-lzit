@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   canTransition,
   computePrice,
+  getDemandMultiplier,
   type PricingParams,
 } from '@babloo/shared';
 import { ERROR_CODES } from '@babloo/shared/errors';
@@ -32,9 +33,17 @@ type Deps = {
 type CreateOrderInput = {
   serviceType: ServiceType;
   location: string;
+  neighborhoodId?: string;
+  scheduledDate?: string;
+  scheduledTimeSlot?: string;
+  demandLevel?: string;
   scheduledStartAt?: string;
   detail: Record<string, unknown>;
 };
+
+function parseDateOnly(value: string) {
+  return new Date(`${value}T00:00:00.000Z`);
+}
 
 type ListOrdersInput = {
   userId: string;
@@ -74,10 +83,15 @@ function extractPricingParams(
         surface: detail.surface as number,
         cleanType: detail.cleanType as string,
         teamType: detail.teamType as string,
+        propertyType: detail.propertyType as string | undefined,
+        floors: detail.floors as number | undefined,
         squadSize: detail.squadSize as number | undefined,
       } as PricingParams;
     case 'cuisine':
-      return { guests: detail.guests as number } as PricingParams;
+      return {
+        guests: detail.guests as number,
+        mealType: detail.mealType as string | undefined,
+      } as PricingParams;
     case 'childcare':
       return {
         children: detail.children as number,
@@ -98,12 +112,15 @@ function buildDetailData(serviceType: ServiceType, detail: Record<string, unknow
         surface: detail.surface as number,
         cleanType: detail.cleanType as CleanType,
         teamType: detail.teamType as TeamType,
+        propertyType: (detail.propertyType as string | undefined) ?? null,
+        floors: (detail.floors as number | undefined) ?? null,
         squadSize: (detail.squadSize as number | undefined) ?? null,
         notes: (detail.notes as string | undefined) ?? null,
       };
     case 'cuisine':
       return {
         guests: detail.guests as number,
+        mealType: (detail.mealType as string | undefined) ?? null,
         dishes: (detail.dishes as string | undefined) ?? null,
       };
     case 'childcare':
@@ -193,6 +210,13 @@ export async function create(deps: Deps, userId: string, input: CreateOrderInput
         status: 'draft',
         floorPrice: pricing.floorPrice,
         location: input.location,
+        neighborhoodId: input.neighborhoodId ?? null,
+        scheduledDate: input.scheduledDate ? parseDateOnly(input.scheduledDate) : null,
+        scheduledTimeSlot: input.scheduledTimeSlot ?? null,
+        demandLevel: input.demandLevel ?? null,
+        demandMultiplier: input.demandLevel
+          ? getDemandMultiplier(input.demandLevel as 'green' | 'yellow' | 'red')
+          : null,
         scheduledStartAt: input.scheduledStartAt ? new Date(input.scheduledStartAt) : null,
       },
     });

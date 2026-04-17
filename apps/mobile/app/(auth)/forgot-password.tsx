@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Alert, Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { otpRequestSchema } from '@babloo/shared';
 import { useTranslation } from 'react-i18next';
-import { BackHeader, Button, Card, Input } from '../../src/components/ui';
-import { colors, radius, shadows, spacing, textStyles } from '../../src/constants/theme';
+import { Button, Card, Input, ScreenHeader } from '../../src/components/ui';
+import { colors, fonts, radius, shadows, spacing, textStyles } from '../../src/constants/theme';
+import { useClampedKeyboardLift } from '../../src/hooks/useClampedKeyboardLift';
 import { getErrorMessage } from '../../src/lib/errors';
 import { useAuth } from '../../src/providers/AuthProvider';
 
@@ -14,6 +16,7 @@ export default function ForgotPasswordScreen() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const { translateY, onCardLayout, onContainerLayout, setProtectedBottom } = useClampedKeyboardLift();
 
   const handleSubmit = async () => {
     setError(undefined);
@@ -37,46 +40,51 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <BackHeader title={t('auth.resetPassword')} />
+    <View style={styles.container}>
+      <ScreenHeader
+        title={t('auth.resetPassword')}
+        onLayout={(event) => {
+          const { y, height } = event.nativeEvent.layout;
+          setProtectedBottom(y + height);
+        }}
+      />
 
-      <View style={styles.content}>
-        <Text style={styles.title}>{t('auth.resetTitle')}</Text>
-        <Text style={styles.subtitle}>{t('auth.resetSubtitle')}</Text>
-
-        <Card style={styles.formCard}>
-          <Input
-            label={t('auth.phone')}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder={t('auth.phonePlaceholder')}
-            keyboardType="phone-pad"
-            autoCapitalize="none"
-            autoCorrect={false}
-            rightElement={
-              <MaterialCommunityIcons
-                name="phone-outline"
-                size={spacing.md + spacing.xs}
-                color={colors.textMuted}
-              />
-            }
-          />
-          {error ? (
-            <View style={styles.errorBanner}>
-              <MaterialCommunityIcons name="alert-circle-outline" size={spacing.md + spacing.xs} color={colors.error} />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-          <Button
-            variant="primary"
-            label={t('auth.sendResetCode')}
-            onPress={handleSubmit}
-            loading={loading}
-            style={styles.submitBtn}
-          />
-        </Card>
+      <View style={styles.content} onLayout={onContainerLayout}>
+        <Animated.View onLayout={onCardLayout} style={{ transform: [{ translateY }] }}>
+          <Card style={styles.formCard}>
+            <Input
+              label={t('auth.phone')}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder={t('auth.phonePlaceholder')}
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+              autoCorrect={false}
+              rightElement={
+                <MaterialCommunityIcons
+                  name="phone-outline"
+                  size={spacing.md + spacing.xs}
+                  color={colors.textMuted}
+                />
+              }
+            />
+            {error ? (
+              <View style={styles.errorBanner}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={spacing.md + spacing.xs} color={colors.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+            <Button
+              variant="primary"
+              label={t('auth.sendResetCode')}
+              onPress={handleSubmit}
+              loading={loading}
+              style={styles.submitBtn}
+            />
+          </Card>
+        </Animated.View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -85,23 +93,43 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+  header: {
+    backgroundColor: colors.navy,
+    paddingTop: Platform.OS === 'ios' ? 64 : 40,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg + spacing.xs,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.whiteA12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnPressed: {
+    transform: [{ scale: 0.93 }],
+    opacity: 0.8,
+  },
+  headerTitle: {
+    fontFamily: fonts.nunito.bold,
+    fontSize: 20,
+    color: colors.white,
+    flex: 1,
+  },
   content: {
     flex: 1,
+    paddingTop: spacing.lg,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
     gap: spacing.md,
-  },
-  title: {
-    ...textStyles.display,
-    color: colors.navy,
-    fontSize: 32,
-    lineHeight: 40,
-    marginTop: spacing.sm,
-  },
-  subtitle: {
-    ...textStyles.body,
-    color: colors.textSec,
-    marginBottom: spacing.sm,
   },
   formCard: {
     gap: spacing.sm,

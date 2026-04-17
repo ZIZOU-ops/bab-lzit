@@ -1,26 +1,54 @@
 import React, { useMemo } from 'react';
-import { Alert, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { BackHeader, Button, Card, LoadingScreen } from '../../../src/components/ui';
+import { Button, Card, LoadingScreen, ScreenHeader } from '../../../src/components/ui';
 import { StatusBadge } from '../../../src/components/order';
 import { colors, radius, shadows, spacing, textStyles } from '../../../src/constants/theme';
 import { useCancelOrder, useRateOrder } from '../../../src/hooks/orders/useOrderMutations';
 import { useOrder, useOrders } from '../../../src/hooks/orders/useOrderQueries';
 import { useOrderSocket } from '../../../src/hooks/orders/useOrderSocket';
+import { formatShortDate } from '../../../src/lib/date';
 import { getErrorMessage } from '../../../src/lib/errors';
 
 const activeStatuses = new Set(['negotiating', 'accepted', 'en_route', 'in_progress']);
 
-const detailIconMap: Record<string, React.ComponentProps<typeof MaterialCommunityIcons>['name']> = {
-  surface: 'ruler-square-compass',
-  cleanType: 'water-outline',
-  teamType: 'account-group-outline',
-  guests: 'silverware-fork-knife',
-  children: 'baby-face-outline',
-  hours: 'clock-outline',
+type ServiceType = 'menage' | 'cuisine' | 'childcare';
+
+type DetailField = {
+  key: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 };
+
+const DETAIL_FIELDS_BY_SERVICE: Record<ServiceType, DetailField[]> = {
+  menage: [
+    { key: 'surface', icon: 'ruler-square-compass' },
+    { key: 'cleanType', icon: 'water-outline' },
+    { key: 'teamType', icon: 'account-group-outline' },
+    { key: 'squadSize', icon: 'account-multiple-plus-outline' },
+  ],
+  cuisine: [
+    { key: 'guests', icon: 'silverware-fork-knife' },
+    { key: 'dishes', icon: 'food-outline' },
+  ],
+  childcare: [
+    { key: 'children', icon: 'baby-face-outline' },
+    { key: 'hours', icon: 'clock-outline' },
+  ],
+};
+
+function hasRenderableDetailValue(value: unknown) {
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim().length > 0;
+  }
+
+  return true;
+}
 
 export default function ClientOrderDetailScreen() {
   const { t, i18n } = useTranslation();
@@ -42,21 +70,59 @@ export default function ClientOrderDetailScreen() {
   }
 
   const order = orderQuery.data;
-  const notesValue =
-    order.detail &&
-    typeof order.detail === 'object' &&
-    'notes' in (order.detail as Record<string, unknown>) &&
-    typeof (order.detail as Record<string, unknown>).notes === 'string'
-      ? String((order.detail as Record<string, unknown>).notes)
+  const detail =
+    order.detail && typeof order.detail === 'object'
+      ? (order.detail as Record<string, unknown>)
       : null;
+  const notesValue =
+    detail &&
+    typeof detail.notes === 'string' &&
+    detail.notes.trim().length > 0
+      ? detail.notes.trim()
+      : null;
+  const detailRows = detail
+    ? DETAIL_FIELDS_BY_SERVICE[order.serviceType as ServiceType]
+        .map((field) => {
+          const rawValue = detail[field.key];
+
+          if (!hasRenderableDetailValue(rawValue)) {
+            return null;
+          }
+
+          return {
+            key: field.key,
+            icon: field.icon,
+            label: t(`booking.${field.key}`, {
+              defaultValue: field.key === 'squadSize' ? 'Taille de l\'équipe' : field.key,
+            }),
+            value:
+              field.key === 'cleanType' || field.key === 'teamType'
+                ? t(`booking.${String(rawValue)}`, { defaultValue: String(rawValue) })
+                : String(rawValue),
+          };
+        })
+        .filter(
+          (
+            row,
+          ): row is {
+            key: string;
+            icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+            label: string;
+            value: string;
+          } => Boolean(row),
+        )
+    : [];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <BackHeader title={t('orders.orderTitle')} rightElement={<StatusBadge status={order.status} />} />
+    <View style={styles.container}>
+      <ScreenHeader title={t('orders.orderTitle')} />
 
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.priceCard}>
-          <Text style={styles.sectionLabel}>{t('orders.amount')}</Text>
+          <View style={styles.priceHeader}>
+            <Text style={styles.sectionLabel}>{t('orders.amount')}</Text>
+            <StatusBadge status={order.status} />
+          </View>
           <View style={styles.amountRow}>
             <Text style={styles.amount}>{order.finalPrice ?? order.floorPrice}</Text>
             <Text style={styles.currency}>MAD</Text>
@@ -64,20 +130,20 @@ export default function ClientOrderDetailScreen() {
           {order.finalPrice ? <Text style={styles.meta}>{t('orders.floor')}: {order.floorPrice} MAD</Text> : null}
         </Card>
 
-        {order.detail ? (
+        {detailRows.length > 0 ? (
           <Card style={styles.block}>
             <Text style={styles.sectionLabel}>{t('orders.detailsSection')}</Text>
-            {Object.entries(order.detail).map(([key, value]) => (
-              <View style={styles.row} key={key}>
+            {detailRows.map((row) => (
+              <View style={styles.row} key={row.key}>
                 <View style={styles.rowLabelWrap}>
                   <MaterialCommunityIcons
-                    name={detailIconMap[key] ?? 'shape-outline'}
+                    name={row.icon}
                     size={spacing.md + spacing.xs}
                     color={colors.clay}
                   />
-                  <Text style={styles.rowLabel}>{t(`booking.${key}`, { defaultValue: key })}</Text>
+                  <Text style={styles.rowLabel}>{row.label}</Text>
                 </View>
-                <Text style={styles.rowValue}>{String(value ?? t('common.notAvailable'))}</Text>
+                <Text style={styles.rowValue}>{row.value}</Text>
               </View>
             ))}
           </Card>
@@ -96,14 +162,14 @@ export default function ClientOrderDetailScreen() {
           <View style={styles.row}>
             <Text style={styles.rowLabel}>{t('orders.createdAt')}</Text>
             <Text style={styles.rowValue}>
-              {new Date(order.createdAt).toLocaleDateString(i18n.language)}
+              {formatShortDate(order.createdAt)}
             </Text>
           </View>
           {order.updatedAt ? (
             <View style={styles.row}>
               <Text style={styles.rowLabel}>{t('orders.updatedAt')}</Text>
               <Text style={styles.rowValue}>
-                {new Date(order.updatedAt).toLocaleDateString(i18n.language)}
+                {formatShortDate(order.updatedAt)}
               </Text>
             </View>
           ) : null}
@@ -227,14 +293,20 @@ export default function ClientOrderDetailScreen() {
           </Pressable>
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing['2xl'], gap: spacing.md },
+  content: { paddingTop: spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: spacing['2xl'], gap: spacing.md },
   priceCard: { gap: spacing.xs, borderRadius: radius.xl, ...shadows.md },
+  priceHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   sectionLabel: {
     ...textStyles.label,
     color: colors.textMuted,
@@ -247,7 +319,7 @@ const styles = StyleSheet.create({
   },
   amount: {
     color: colors.navy,
-    fontFamily: 'Fraunces_700Bold',
+    fontFamily: 'Alexandria_900Black',
     fontSize: 38,
     lineHeight: 44,
   },

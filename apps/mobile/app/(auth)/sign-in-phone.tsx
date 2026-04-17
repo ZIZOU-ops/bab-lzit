@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { otpRequestSchema } from '@babloo/shared';
 import { useTranslation } from 'react-i18next';
-import { BackHeader, Button, Card, Input } from '../../src/components/ui';
+import { Button, Input } from '../../src/components/ui';
+import { AuthFormHeader } from '../../src/components/AuthFormHeader';
 import { colors, radius, shadows, spacing, textStyles } from '../../src/constants/theme';
+import { useClampedKeyboardLift } from '../../src/hooks/useClampedKeyboardLift';
 import { getErrorMessage } from '../../src/lib/errors';
 import { useAuth } from '../../src/providers/AuthProvider';
 
@@ -15,6 +17,29 @@ export default function SignInPhoneScreen() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+
+  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const cardTranslateY = useRef(new Animated.Value(30)).current;
+  const { translateY, onCardLayout, onContainerLayout, setProtectedBottom } = useClampedKeyboardLift();
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(cardOpacity, {
+        toValue: 1,
+        duration: 600,
+        delay: 400,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardTranslateY, {
+        toValue: 0,
+        delay: 400,
+        useNativeDriver: true,
+        damping: 16,
+        stiffness: 80,
+      }),
+    ]).start();
+  }, [cardOpacity, cardTranslateY]);
 
   const handleSubmit = async () => {
     setError(undefined);
@@ -45,78 +70,87 @@ export default function SignInPhoneScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <BackHeader title={t('auth.signInWithPhone')} />
+    <View style={styles.container}>
+      <AuthFormHeader
+        title={t('auth.phoneLoginTitle')}
+        subtitle={t('auth.phoneLoginSubtitle')}
+        typeSpeed={80}
+        onHeaderLayout={setProtectedBottom}
+      />
 
-      <View style={styles.content}>
-        <Text style={styles.title}>{t('auth.phoneLoginTitle')}</Text>
-        <Text style={styles.subtitle}>{t('auth.phoneLoginSubtitle')}</Text>
+      <View style={styles.content} onLayout={onContainerLayout}>
+        <Animated.View
+          onLayout={onCardLayout}
+          style={[
+            styles.cardOuter,
+            {
+              opacity: cardOpacity,
+              transform: [
+                { translateY: cardTranslateY },
+                { translateY },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.card}>
+            <Input
+              label={t('auth.phone')}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder={t('auth.phonePlaceholder')}
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+              autoCorrect={false}
+              rightElement={
+                <MaterialCommunityIcons
+                  name="phone-outline"
+                  size={spacing.md + spacing.xs}
+                  color={colors.textMuted}
+                />
+              }
+            />
 
-        <Card style={styles.formCard}>
-          <Input
-            label={t('auth.phone')}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder={t('auth.phonePlaceholder')}
-            keyboardType="phone-pad"
-            autoCapitalize="none"
-            autoCorrect={false}
-            rightElement={
-              <MaterialCommunityIcons
-                name="phone-outline"
-                size={spacing.md + spacing.xs}
-                color={colors.textMuted}
-              />
-            }
-          />
+            {error ? (
+              <View style={styles.errorBanner}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={spacing.md + spacing.xs} color={colors.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
-          {error ? (
-            <View style={styles.errorBanner}>
-              <MaterialCommunityIcons name="alert-circle-outline" size={spacing.md + spacing.xs} color={colors.error} />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          <Button
-            variant="primary"
-            label={t('auth.sendCode')}
-            onPress={handleSubmit}
-            loading={loading}
-            style={styles.submitBtn}
-          />
-        </Card>
+            <Button
+              variant="primary"
+              label={t('auth.sendCode')}
+              onPress={handleSubmit}
+              loading={loading}
+              style={styles.submitBtn}
+            />
+          </View>
+        </Animated.View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.navy,
   },
   content: {
     flex: 1,
+    justifyContent: 'flex-end',
+    paddingBottom: spacing['2xl'],
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    gap: spacing.md,
   },
-  title: {
-    ...textStyles.display,
-    color: colors.navy,
-    fontSize: 34,
-    lineHeight: 42,
-    marginTop: spacing.sm,
-  },
-  subtitle: {
-    ...textStyles.body,
-    color: colors.textSec,
-    marginBottom: spacing.sm,
-  },
-  formCard: {
-    gap: spacing.sm,
+  cardOuter: {
     borderRadius: radius.xl,
-    ...shadows.md,
+    overflow: 'hidden',
+    ...shadows.xl,
+  },
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    padding: spacing.lg,
+    gap: spacing.sm,
   },
   errorBanner: {
     borderRadius: radius.md,

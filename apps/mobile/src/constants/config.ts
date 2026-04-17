@@ -1,5 +1,6 @@
-const PROD_API_URL = 'https://bab-lma-production.up.railway.app';
-const devHost = '127.0.0.1';
+import { NativeModules } from 'react-native';
+
+const PROD_API_URL = 'https://bab-lzit-production.up.railway.app';
 
 function normalizeBaseUrl(rawUrl?: string) {
   if (!rawUrl) {
@@ -14,6 +15,14 @@ function normalizeBaseUrl(rawUrl?: string) {
   // Keep backward compatibility with legacy env values like ".../v1".
   return trimmed.replace(/\/+$/, '').replace(/\/v1$/, '');
 }
+
+function resolveDevHost() {
+  const scriptURL = NativeModules?.SourceCode?.scriptURL as string | undefined;
+  const match = scriptURL?.match(/^https?:\/\/([^/:]+)/);
+  return match?.[1] ?? '127.0.0.1';
+}
+
+const devHost = resolveDevHost();
 
 const runtimeApiUrl =
   normalizeBaseUrl(process.env.EXPO_PUBLIC_API_URL) ??

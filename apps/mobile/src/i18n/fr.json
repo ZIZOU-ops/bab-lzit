@@ -41,6 +41,7 @@
   },
   "home": {
     "title": "Babloo",
+    "greeting": "Bonjour",
     "subtitle": "Vos services à domicile",
     "services": "Services",
     "bookService": "Réserver un service",

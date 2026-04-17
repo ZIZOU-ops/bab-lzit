@@ -160,13 +160,13 @@ const styles = StyleSheet.create({
   },
   pendingAmount: {
     color: colors.navy,
-    fontFamily: 'Fraunces_700Bold',
+    fontFamily: 'Alexandria_900Black',
     fontSize: 18,
   },
   heroAmount: {
     textAlign: 'center',
     color: colors.navy,
-    fontFamily: 'Fraunces_700Bold',
+    fontFamily: 'Alexandria_900Black',
     fontSize: 28,
   },
   heroAmountSmall: {

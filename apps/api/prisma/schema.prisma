@@ -127,9 +127,14 @@ model Order {
   floorPrice       Int         @map("floor_price")
   finalPrice       Int?        @map("final_price")
   tipAmount        Int         @default(0) @map("tip_amount")
+  scheduledDate    DateTime?   @map("scheduled_date") @db.Date
+  scheduledTimeSlot String?    @map("scheduled_time_slot")
+  demandLevel      String?     @map("demand_level")
+  demandMultiplier Float?      @map("demand_multiplier")
   scheduledStartAt DateTime?   @map("scheduled_start_at") @db.Timestamptz
   scheduledEndAt   DateTime?   @map("scheduled_end_at") @db.Timestamptz
   location         String      @db.VarChar(100)
+  neighborhoodId   String?     @map("neighborhood_id")
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -146,25 +151,40 @@ model Order {
 }
 
 model OrderDetail {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderId   String    @unique @map("order_id") @db.Uuid
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId      String    @unique @map("order_id") @db.Uuid
   // ménage
-  surface   Int?
-  cleanType CleanType? @map("clean_type")
-  teamType  TeamType?  @map("team_type")
-  squadSize Int?       @map("squad_size")
+  surface      Int?
+  cleanType    CleanType? @map("clean_type")
+  teamType     TeamType?  @map("team_type")
+  squadSize    Int?       @map("squad_size")
+  propertyType String?    @map("property_type")
+  floors       Int?
   // cuisine
-  guests    Int?
-  dishes    String?    @db.VarChar(500)
+  guests       Int?
+  mealType     String?    @map("meal_type")
+  dishes       String?    @db.VarChar(500)
   // childcare
-  children  Int?
-  hours     Int?
+  children     Int?
+  hours        Int?
   // shared
-  notes     String?    @db.VarChar(500)
+  notes        String?    @db.VarChar(500)
 
   order Order @relation(fields: [orderId], references: [id])
 
   @@map("order_details")
+}
+
+model DemandSlot {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  timeSlot  String   @map("time_slot")
+  level     String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([date, timeSlot])
+  @@map("demand_slots")
 }
 
 model OrderAssignment {

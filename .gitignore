@@ -7,3 +7,4 @@ dist/
 .DS_Store
 ios/
 android/
+apps/api/uploads/

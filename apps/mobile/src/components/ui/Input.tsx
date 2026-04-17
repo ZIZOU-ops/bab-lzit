@@ -61,34 +61,36 @@ export function Input({
   return (
     <View style={style}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        secureTextEntry={secureTextEntry}
-        multiline={multiline}
-        numberOfLines={numberOfLines}
-        inputMode={inputMode}
-        autoCapitalize={autoCapitalize}
-        keyboardType={keyboardType}
-        maxLength={maxLength}
-        autoCorrect={autoCorrect}
-        returnKeyType={returnKeyType}
-        textContentType={textContentType}
-        style={[
-          styles.input,
-          focused && styles.focused,
-          leftElement ? styles.inputWithLeft : null,
-          rightElement ? styles.inputWithRight : null,
-          textStyle,
-        ]}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        accessibilityLabel={label || placeholder || t('common.input')}
-      />
-      {leftElement ? <View style={styles.leftElement}>{leftElement}</View> : null}
-      {rightElement ? <View style={styles.rightElement}>{rightElement}</View> : null}
+      <View style={styles.inputWrap}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry={secureTextEntry}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          inputMode={inputMode}
+          autoCapitalize={autoCapitalize}
+          keyboardType={keyboardType}
+          maxLength={maxLength}
+          autoCorrect={autoCorrect}
+          returnKeyType={returnKeyType}
+          textContentType={textContentType}
+          style={[
+            styles.input,
+            focused && styles.focused,
+            leftElement ? styles.inputWithLeft : null,
+            rightElement ? styles.inputWithRight : null,
+            textStyle,
+          ]}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          accessibilityLabel={label || placeholder || t('common.input')}
+        />
+        {leftElement ? <View style={styles.leftElement}>{leftElement}</View> : null}
+        {rightElement ? <View style={styles.rightElement}>{rightElement}</View> : null}
+      </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
@@ -100,6 +102,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.navy,
     marginBottom: 6,
+  },
+  inputWrap: {
+    position: 'relative',
+    justifyContent: 'center',
   },
   input: {
     width: '100%',
@@ -125,12 +131,16 @@ const styles = StyleSheet.create({
   leftElement: {
     position: 'absolute',
     left: spacing.md,
-    top: spacing.lg + spacing.xs,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
   rightElement: {
     position: 'absolute',
     right: spacing.md,
-    top: spacing.lg + spacing.xs,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
   error: {
     marginTop: 6,

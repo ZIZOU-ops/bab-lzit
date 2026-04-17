@@ -2,7 +2,7 @@ import React, { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon } from './icons';
-import { colors, radius, spacing, textStyles } from '../theme';
+import { colors, spacing, textStyles } from '../theme';
 
 interface BackHeaderProps {
   title: string;
@@ -21,7 +21,7 @@ export function BackHeader({ title, onBack, right }: BackHeaderProps) {
         accessibilityRole="button"
         accessibilityLabel="Go back"
       >
-        <BackIcon size={20} color={colors.navy} />
+        <BackIcon size={24} color={colors.navy} />
       </Pressable>
 
       <Text style={styles.title} numberOfLines={1}>
@@ -45,16 +45,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backButton: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.full,
-    backgroundColor: colors.bg,
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   backButtonPressed: {
-    backgroundColor: colors.border,
+    opacity: 0.55,
   },
   title: {
     ...textStyles.h2,
@@ -62,7 +60,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   right: {
-    minWidth: 34,
+    minWidth: 32,
     alignItems: 'flex-end',
   },
 });

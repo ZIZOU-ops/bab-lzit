@@ -23,7 +23,7 @@ export function PriceDisplay({
 const styles = StyleSheet.create({
   price: {
     color: colors.navy,
-    fontFamily: 'Fraunces_700Bold',
+    fontFamily: 'Alexandria_900Black',
     fontSize: 18,
   },
   sub: {

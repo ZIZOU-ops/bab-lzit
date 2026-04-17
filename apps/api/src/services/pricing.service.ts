@@ -1,13 +1,33 @@
-import { computePrice, NEGOTIATION_CEILING_MULTIPLIER } from '@babloo/shared/pricing';
+import {
+  computePrice,
+  getDemandMultiplier,
+  getLocationMultiplier,
+} from '@babloo/shared/pricing';
 import type { PricingParams } from '@babloo/shared/pricing';
 import type { ServiceType } from '@prisma/client';
 
-export function estimatePrice(serviceType: ServiceType, detail: PricingParams) {
+export type PricingEstimateResult = {
+  floorPrice: number;
+  recommendedPrice: number;
+  ceilingPrice: number;
+  durationMinutes: { min: number; max: number };
+};
+
+export function estimatePrice(
+  serviceType: ServiceType,
+  detail: PricingParams,
+): PricingEstimateResult {
   const result = computePrice(serviceType, detail);
+  const locationMult = detail.neighborhoodId ? getLocationMultiplier(detail.neighborhoodId) : 1.0;
+  const demandMult = getDemandMultiplier(detail.demandLevel);
+  const recommendedPrice = Math.round(
+    Math.max(result.floorPrice, result.floorPrice * locationMult * demandMult),
+  );
 
   return {
     floorPrice: result.floorPrice,
-    ceilingPrice: Math.round(result.floorPrice * NEGOTIATION_CEILING_MULTIPLIER),
+    recommendedPrice,
+    ceilingPrice: result.ceiling,
     durationMinutes: result.durationMinutes,
   };
 }

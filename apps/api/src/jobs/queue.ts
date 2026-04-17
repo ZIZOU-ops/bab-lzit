@@ -6,7 +6,8 @@ const redisUrl = new URL(env.REDIS_URL);
 export const bullConnection = {
   host: redisUrl.hostname,
   port: Number(redisUrl.port || 6379),
-  ...(redisUrl.password ? { password: redisUrl.password } : {}),
+  ...(redisUrl.password ? { password: decodeURIComponent(redisUrl.password) } : {}),
+  ...(redisUrl.protocol === 'rediss:' ? { tls: {} } : {}),
 };
 
 export const notificationQueue = new Queue('notification', {

@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   title: {
-    fontFamily: 'Fraunces_700Bold',
+    fontFamily: 'Alexandria_900Black',
     fontSize: 18,
     color: colors.navy,
     marginBottom: 4,

@@ -1,38 +1,17 @@
 import React from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { Button, LoadingScreen } from '../../../src/components/ui';
-import { colors, spacing, textStyles } from '../../../src/constants/theme';
+import { Button, LoadingScreen, ScreenHeader } from '../../../src/components/ui';
+import { colors, fonts, radius, spacing, textStyles } from '../../../src/constants/theme';
 import { OrderCard } from '../../../src/components/order';
+import {
+  isClientOrderItem,
+  isMenageOrder,
+} from '../../../src/components/order/orderListItem';
 import { useOrders } from '../../../src/hooks/orders/useOrderQueries';
 import { getPageItems } from '../../../src/lib/pagination';
-
-type ClientOrderItem = {
-  id: string;
-  serviceType: string;
-  status: string;
-  floorPrice: number;
-  finalPrice?: number | null;
-  createdAt: string | Date;
-  location?: string;
-};
-
-function isClientOrderItem(item: unknown): item is ClientOrderItem {
-  if (!item || typeof item !== 'object') {
-    return false;
-  }
-
-  const candidate = item as Partial<ClientOrderItem>;
-  return (
-    typeof candidate.id === 'string' &&
-    typeof candidate.serviceType === 'string' &&
-    typeof candidate.status === 'string' &&
-    typeof candidate.floorPrice === 'number' &&
-    (typeof candidate.createdAt === 'string' || candidate.createdAt instanceof Date)
-  );
-}
 
 export default function OrdersTabScreen() {
   const { t } = useTranslation();
@@ -43,13 +22,13 @@ export default function OrdersTabScreen() {
   }
 
   const items =
-    ordersQuery.data?.pages?.flatMap((page) => getPageItems(page).filter(isClientOrderItem)) ?? [];
+    ordersQuery.data?.pages?.flatMap((page) =>
+      getPageItems(page).filter(isClientOrderItem).filter(isMenageOrder),
+    ) ?? [];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('orders.myOrders')}</Text>
-      </View>
+    <View style={styles.container}>
+      <ScreenHeader title={t('orders.myOrders')} showBack={false} />
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
@@ -87,7 +66,7 @@ export default function OrdersTabScreen() {
           </View>
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -97,15 +76,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   header: {
+    backgroundColor: colors.navy,
+    paddingTop: Platform.OS === 'ios' ? 64 : 40,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.lg + spacing.xs,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
   },
-  title: {
-    ...textStyles.h1,
-    color: colors.navy,
+  headerTitle: {
+    fontFamily: fonts.nunito.bold,
+    fontSize: 22,
+    color: colors.white,
   },
   listContent: {
+    paddingTop: spacing.lg,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing['2xl'],
     flexGrow: 1,

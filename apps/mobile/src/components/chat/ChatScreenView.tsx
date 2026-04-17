@@ -1,19 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { trpc } from '../../lib/trpc';
 import { useAuth } from '../../providers/AuthProvider';
-import { POLL_INTERVAL_MS } from '../../constants/config';
+import { API_URL, POLL_INTERVAL_MS } from '../../constants/config';
 import { colors, radius, shadows, spacing, textStyles } from '../../constants/theme';
 import { BackHeader, LoadingScreen } from '../ui';
 import { MessageBubble } from './MessageBubble';
@@ -24,6 +25,7 @@ import { useMessages } from '../../hooks/negotiation/useMessages';
 import { useOffers } from '../../hooks/negotiation/useOffers';
 import { useChatSocket } from '../../hooks/negotiation/useChatSocket';
 import { useOrder } from '../../hooks/orders/useOrderQueries';
+import { formatChatImageContent } from './messageContent';
 
 function createClientMessageId() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
@@ -48,6 +50,8 @@ export function ChatScreenView({ orderId }: { orderId: string }) {
       await utils.negotiation.messages.invalidate({ orderId, limit: 30 });
     },
   });
+
+  const uploadChatImageMutation = trpc.negotiation.uploadChatImage.useMutation();
 
   const createOfferMutation = trpc.negotiation.createOffer.useMutation({
     async onSuccess() {
@@ -110,7 +114,7 @@ export function ChatScreenView({ orderId }: { orderId: string }) {
 
   if (!order) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView edges={[]} style={styles.container}>
         <BackHeader title={t('chat.orderChat')} />
         <View style={styles.center}>
           <Text style={styles.errorText}>{t('chat.orderNotFound')}</Text>
@@ -127,27 +131,88 @@ export function ChatScreenView({ orderId }: { orderId: string }) {
 
   const canNegotiate = order.status === 'negotiating';
 
+  const sendChatContent = (content: string, options?: { clearInput?: boolean }) => {
+    const nextContent = content.trim();
+    if (!nextContent) {
+      return;
+    }
+
+    if (options?.clearInput) {
+      setInput('');
+    }
+
+    if (socket && isConnected) {
+      socket.emit('typing:stop', { orderId });
+    }
+
+    const clientMessageId = createClientMessageId();
+
+    if (socket && isConnected) {
+      socket.emit('message:send', {
+        orderId,
+        content: nextContent,
+        clientMessageId,
+      });
+      return;
+    }
+
+    sendMessageMutation.mutate({
+      orderId,
+      content: nextContent,
+      clientMessageId,
+    });
+  };
+
+  const openCamera = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(t('common.error'), t('chat.cameraPermissionDenied'));
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        base64: true,
+        quality: 0.45,
+        cameraType: ImagePicker.CameraType.back,
+      });
+
+      if (result.canceled || !result.assets?.[0]) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      if (!asset.base64) {
+        Alert.alert(t('common.error'), t('chat.imageUnavailable'));
+        return;
+      }
+
+      const uploaded = await uploadChatImageMutation.mutateAsync({
+        orderId,
+        data: asset.base64,
+        mimeType: asset.mimeType ?? 'image/jpeg',
+      });
+
+      sendChatContent(formatChatImageContent(`${API_URL}${uploaded.path}`));
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : t('chat.imageUploadFailed');
+      Alert.alert(t('common.error'), message);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? spacing['2xl'] * 2 + spacing.xs : 0}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView edges={[]} style={styles.container}>
         <BackHeader
           title={t('chat.orderChat')}
-          rightElement={
-            <View style={[styles.statusChip, isConnected ? styles.statusChipOnline : styles.statusChipOffline]}>
-              <Ionicons
-                name={isConnected ? 'wifi' : 'wifi-outline'}
-                size={spacing.sm + spacing.xs}
-                color={isConnected ? colors.success : colors.textMuted}
-              />
-              <Text style={[styles.statusText, isConnected ? styles.statusTextOnline : styles.statusTextOffline]}>
-                {isConnected ? t('chat.live') : t('chat.offlineFallback')}
-              </Text>
-            </View>
-          }
         />
 
         <FlatList
@@ -218,6 +283,9 @@ export function ChatScreenView({ orderId }: { orderId: string }) {
         <MessageInput
           value={input}
           onChangeText={setInput}
+          onOpenCamera={() => {
+            void openCamera();
+          }}
           onTypingStart={() => {
             if (socket && isConnected) {
               socket.emit('typing:start', { orderId });
@@ -229,29 +297,10 @@ export function ChatScreenView({ orderId }: { orderId: string }) {
             }
           }}
           onSend={() => {
-            const content = input.trim();
-            if (!content) {
-              return;
-            }
-
-            setInput('');
-            const clientMessageId = createClientMessageId();
-
-            if (socket && isConnected) {
-              socket.emit('message:send', {
-                orderId,
-                content,
-                clientMessageId,
-              });
-              return;
-            }
-
-            sendMessageMutation.mutate({
-              orderId,
-              content,
-              clientMessageId,
-            });
+            sendChatContent(input, { clearInput: true });
           }}
+          disabled={sendMessageMutation.isPending || uploadChatImageMutation.isPending}
+          isUploadingImage={uploadChatImageMutation.isPending}
         />
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -275,33 +324,6 @@ const styles = StyleSheet.create({
   errorText: {
     ...textStyles.body,
     color: colors.textSec,
-  },
-  statusChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: radius.full,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderWidth: spacing.xs / spacing.xs,
-  },
-  statusChipOnline: {
-    backgroundColor: colors.successBg,
-    borderColor: colors.success,
-  },
-  statusChipOffline: {
-    backgroundColor: colors.bgAlt,
-    borderColor: colors.border,
-  },
-  statusText: {
-    fontFamily: 'DMSans_600SemiBold',
-    fontSize: spacing.sm + spacing.xs - spacing.xs / 2,
-  },
-  statusTextOnline: {
-    color: colors.success,
-  },
-  statusTextOffline: {
-    color: colors.textMuted,
   },
   list: {
     flex: 1,

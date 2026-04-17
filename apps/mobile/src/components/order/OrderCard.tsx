@@ -1,50 +1,44 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { colors, radius, shadows, spacing, textStyles } from '../../constants/theme';
+import { formatShortDate } from '../../lib/date';
 import { Card } from '../ui';
+import { CleaningModeGlyph } from './CleaningModeGlyph';
 import { PriceDisplay } from './PriceDisplay';
 import { StatusBadge } from './StatusBadge';
+import { getCleaningOrderMode, type ClientOrderItem } from './orderListItem';
 
 type OrderCardProps = {
-  order: {
-    id: string;
-    serviceType: string;
-    status: string;
-    floorPrice: number;
-    finalPrice?: number | null;
-    createdAt: string | Date;
-    location?: string;
-  };
+  order: ClientOrderItem;
   onPress: () => void;
+  ctaLabel?: string;
 };
 
-function getServiceIcon(serviceType: string): React.ComponentProps<typeof MaterialCommunityIcons>['name'] {
-  if (serviceType === 'menage') return 'broom';
-  if (serviceType === 'cuisine') return 'chef-hat';
-  return 'baby-face-outline';
-}
-
-export function OrderCard({ order, onPress }: OrderCardProps) {
-  const { t, i18n } = useTranslation();
+export function OrderCard({ order, onPress, ctaLabel }: OrderCardProps) {
+  const { t } = useTranslation();
+  const cleaningMode = getCleaningOrderMode(order);
 
   return (
     <Pressable style={({ pressed }) => [styles.pressable, pressed && styles.pressed]} onPress={onPress} accessibilityRole="button">
       <Card style={styles.card}>
         <View style={styles.top}>
           <View style={styles.leftTop}>
-            <View style={styles.iconWrap}>
-              <MaterialCommunityIcons name={getServiceIcon(order.serviceType)} size={spacing.md + spacing.xs} color={colors.navy} />
+            <View
+              style={[
+                styles.iconWrap,
+                cleaningMode === 'standard'
+                  ? styles.iconWrapStandard
+                  : styles.iconWrapBlue,
+              ]}
+            >
+              <CleaningModeGlyph mode={cleaningMode} size={spacing.xl + spacing.xs} />
             </View>
             <View style={styles.info}>
               <Text style={styles.title}>{t(`booking.${order.serviceType}`)}</Text>
               <Text style={styles.date}>
-                {new Date(order.createdAt).toLocaleDateString(i18n.language, {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
+                {formatShortDate(order.createdAt)}
               </Text>
             </View>
           </View>
@@ -61,7 +55,7 @@ export function OrderCard({ order, onPress }: OrderCardProps) {
         <View style={styles.bottom}>
           <PriceDisplay floorPrice={order.floorPrice} finalPrice={order.finalPrice} />
           <View style={styles.detailLinkWrap}>
-            <Text style={styles.detailLink}>{t('orders.viewDetails')}</Text>
+            <Text style={styles.detailLink}>{ctaLabel ?? t('orders.viewDetails')}</Text>
             <Ionicons name="chevron-forward" size={spacing.md + spacing.xs} color={colors.clay} />
           </View>
         </View>
@@ -97,9 +91,14 @@ const styles = StyleSheet.create({
     width: spacing['2xl'] + spacing.sm,
     height: spacing['2xl'] + spacing.sm,
     borderRadius: radius.lg,
-    backgroundColor: colors.clayTint,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconWrapStandard: {
+    backgroundColor: '#F4D7CE',
+  },
+  iconWrapBlue: {
+    backgroundColor: '#D8DEFF',
   },
   info: {
     flex: 1,

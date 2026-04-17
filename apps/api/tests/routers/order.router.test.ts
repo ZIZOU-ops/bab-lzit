@@ -62,7 +62,65 @@ describe('order.router', () => {
       },
     });
 
-    expect(order.floorPrice).toBe(80);
+    expect(order.floorPrice).toBe(120);
+  });
+
+  it('create menage order applies property type and floors server-side', async () => {
+    const { user } = await createTestUser();
+    const caller = createTestCaller({ id: user.id, role: 'client' });
+
+    const order = await caller.order.create({
+      serviceType: 'menage',
+      location: 'Casablanca Maarif',
+      neighborhoodId: 'hay_riad',
+      detail: {
+        serviceType: 'menage',
+        surface: 120,
+        cleanType: 'simple',
+        teamType: 'solo',
+        propertyType: 'villa',
+        floors: 2,
+      },
+    });
+
+    expect(order.floorPrice).toBe(220);
+    expect(order.neighborhoodId).toBe('hay_riad');
+
+    const detail = await db.orderDetail.findUniqueOrThrow({
+      where: { orderId: order.id },
+    });
+    const storedOrder = await db.order.findUniqueOrThrow({
+      where: { id: order.id },
+    });
+    expect(detail.propertyType).toBe('villa');
+    expect(detail.floors).toBe(2);
+    expect(storedOrder.neighborhoodId).toBe('hay_riad');
+  });
+
+  it('create order persists scheduling snapshot on the order', async () => {
+    const { user } = await createTestUser();
+    const caller = createTestCaller({ id: user.id, role: 'client' });
+
+    const order = await caller.order.create({
+      serviceType: 'cuisine',
+      location: 'Rabat Agdal',
+      scheduledDate: '2026-03-29',
+      scheduledTimeSlot: 'evening',
+      demandLevel: 'red',
+      detail: {
+        serviceType: 'cuisine',
+        guests: 4,
+      },
+    });
+
+    const storedOrder = await db.order.findUniqueOrThrow({
+      where: { id: order.id },
+    });
+
+    expect(storedOrder.scheduledDate?.toISOString().slice(0, 10)).toBe('2026-03-29');
+    expect(storedOrder.scheduledTimeSlot).toBe('evening');
+    expect(storedOrder.demandLevel).toBe('red');
+    expect(storedOrder.demandMultiplier).toBe(1.2);
   });
 
   it('create cuisine order with 5 guests = correct price', async () => {
@@ -78,7 +136,29 @@ describe('order.router', () => {
       },
     });
 
-    expect(order.floorPrice).toBe(130);
+    expect(order.floorPrice).toBe(280);
+  });
+
+  it('create cuisine order applies meal type server-side', async () => {
+    const { user } = await createTestUser();
+    const caller = createTestCaller({ id: user.id, role: 'client' });
+
+    const order = await caller.order.create({
+      serviceType: 'cuisine',
+      location: 'Rabat Agdal',
+      detail: {
+        serviceType: 'cuisine',
+        guests: 6,
+        mealType: 'reception',
+      },
+    });
+
+    expect(order.floorPrice).toBe(420);
+
+    const detail = await db.orderDetail.findUniqueOrThrow({
+      where: { orderId: order.id },
+    });
+    expect(detail.mealType).toBe('reception');
   });
 
   it('list orders returns paginated results with correct cursor', async () => {

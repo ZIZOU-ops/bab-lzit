@@ -8,7 +8,7 @@ export function LoadingScreen() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={colors.navy} />
+      <ActivityIndicator size="large" color={colors.white} />
       <Text style={styles.label}>{t('common.loading')}</Text>
     </View>
   );
@@ -17,13 +17,13 @@ export function LoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.navy,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
   },
   label: {
     ...textStyles.body,
-    color: colors.textMuted,
+    color: colors.white,
   },
 });

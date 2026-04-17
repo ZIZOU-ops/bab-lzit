@@ -1,10 +1,22 @@
 import React, { useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
+import {
+  Alexandria_300Light,
+  Alexandria_400Regular,
+  Alexandria_500Medium,
+  Alexandria_600SemiBold,
+  Alexandria_700Bold,
+  Alexandria_800ExtraBold,
+  Alexandria_900Black,
+} from '@expo-google-fonts/alexandria';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import { ErrorBoundary } from '../src/components/ui';
 import { AuthProvider } from '../src/providers/AuthProvider';
+import { CircularRevealProvider } from '../src/providers/CircularRevealProvider';
 import { I18nProvider } from '../src/providers/I18nProvider';
 import { PushNotificationsProvider } from '../src/providers/PushNotificationsProvider';
 import { SocketProvider } from '../src/providers/SocketProvider';
@@ -14,11 +26,15 @@ void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Fraunces_300Light: require('../assets/fonts/Fraunces-Light.ttf'),
-    Fraunces_500Medium: require('../assets/fonts/Fraunces-Medium.ttf'),
-    Fraunces_600SemiBold: require('../assets/fonts/Fraunces-SemiBold.ttf'),
-    Fraunces_700Bold: require('../assets/fonts/Fraunces-Bold.ttf'),
-    Fraunces_400Regular_Italic: require('../assets/fonts/Fraunces-Italic.ttf'),
+    ...Ionicons.font,
+    ...MaterialCommunityIcons.font,
+    Alexandria_300Light,
+    Alexandria_400Regular,
+    Alexandria_500Medium,
+    Alexandria_600SemiBold,
+    Alexandria_700Bold,
+    Alexandria_800ExtraBold,
+    Alexandria_900Black,
     DMSans_300Light: require('../assets/fonts/DMSans-Light.ttf'),
     DMSans_400Regular: require('../assets/fonts/DMSans-Regular.ttf'),
     DMSans_500Medium: require('../assets/fonts/DMSans-Medium.ttf'),
@@ -28,7 +44,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      void SplashScreen.hideAsync();
+      // Don't hide splash here — let the auth page hide it
+      // after the Grainient WebView is loaded.
+      // Fallback: hide after 3s in case we're not on auth.
+      const timeout = setTimeout(() => {
+        void SplashScreen.hideAsync();
+      }, 3000);
+      return () => clearTimeout(timeout);
     }
   }, [fontError, fontsLoaded]);
 
@@ -92,8 +114,12 @@ export default function RootLayout() {
           <TRPCProvider>
             <SocketProvider>
               <PushNotificationsProvider>
-                <StatusBar style="dark" />
-                <Slot />
+                <CircularRevealProvider>
+                  <View style={rootStyles.container}>
+                    <StatusBar style="light" />
+                    <Slot />
+                  </View>
+                </CircularRevealProvider>
               </PushNotificationsProvider>
             </SocketProvider>
           </TRPCProvider>
@@ -102,3 +128,10 @@ export default function RootLayout() {
     </I18nProvider>
   );
 }
+
+const rootStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0E1442',
+  },
+});
